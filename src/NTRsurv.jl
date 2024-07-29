@@ -1,7 +1,6 @@
 module NTRsurv
 
-import Distributions
-
-greet() = print("Hello World!")
+using Distributions, Roots
+import SpecialFunctions.gamma
 
 end # module
