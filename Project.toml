@@ -2,3 +2,6 @@ name = "NTRsurv"
 uuid = "44a71bb7-9d27-4d6a-8d2f-9a31f1763d85"
 authors = ["alan7riva <alan@sigma.iimas.unam.mx>"]
 version = "0.1.0"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
