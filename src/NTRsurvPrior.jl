@@ -418,7 +418,6 @@ function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRrep)
     X =  [0.0;data.T]
     R₁ = data.R₁
     R₂ = data.R₂
-    δ = data.δ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] ) ) 
     for k in 1:n
