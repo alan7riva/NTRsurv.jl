@@ -253,7 +253,7 @@ function postmeansurv(t::Array{Float64},model::ModelNTRrep)
     R₂ = model.data.R₂
     cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
     cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    disc_incr(k::Int64) = sum( [ binomial(nᵉ[k],l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+2) ) for l in 0:(nᵉ[k]-1) ] )/sum( [ binomial(nᵉ[k],l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] )
+    disc_incr(k::Int64) = sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+2) ) for l in 0:(nᵉ[k]-1) ] )/sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] )
     cont_fact_run = 1.0
     n_prev = 1
     disc_fact_run = 1.0
@@ -399,6 +399,34 @@ function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
     for k in 1:n
         l += cont_incr(k)
         if δ[k] == 1
+            l += disc_incr(k)
+        end
+    end
+    return l
+end
+
+function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRrep)
+    l = 0.0
+    κ = baseline.κ
+    dκ = baseline.dκ
+    if dκ == zero
+        @error "ERROR: κ derivative not provided in baseline."
+    end
+    β = 1.0/log(1.0+1.0/α₀)
+    n = data.n
+    nᵉ = [model.data.nᵉ;0]
+    X =  [0.0;data.T]
+    R₁ = data.R₁
+    R₂ = data.R₂
+    δ = data.δ
+    cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
+
+    
+
+    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] ) ) 
+    for k in 1:n
+        l += cont_incr(k)
+        if nᵉ[k] >= 1
             l += disc_incr(k)
         end
     end
