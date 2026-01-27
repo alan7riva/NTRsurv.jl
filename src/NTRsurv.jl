@@ -24,7 +24,7 @@ export
     RobMonMHwithinGIBBStune,
     RandWalkMHwithinGibbs,
     SuffStatsRegreNTR,
-    cred_band_mat,
+    cred_band,
     loglikNTR,
     loglikRegreNTR,
     posterior_sim,

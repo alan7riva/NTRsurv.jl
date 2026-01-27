@@ -178,9 +178,8 @@ function ModelNTR( α::Float64, baseline::BaselineNTR, data::DataNTRrep)
 end
 
 function ModelNTR(α::Float64,data::DataNTR)
-    β = 1.0/log(1.0+1.0/α)
     baseline = EmpBayesBaseline(data)
-    return ModelNTR( α, β, baseline, data)
+    return ModelNTR( α, baseline, data)
 end
 
 """
@@ -253,7 +252,11 @@ function postmeansurv(t::Array{Float64},model::ModelNTRrep)
     R₂ = model.data.R₂
     cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
     cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    disc_incr(k::Int64) = sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+2) ) for l in 0:(nᵉ[k]-1) ] )/sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] )
+    disc_incr_rep(k::Int64) = sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+2) ) for l in 0:(nᵉ[k]-1) ] )/sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] )
+    disc_incr_norep(k::Int64) = log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) )
+    function disc_incr(k::Int64)
+        
+    end
     cont_fact_run = 1.0
     n_prev = 1
     disc_fact_run = 1.0
