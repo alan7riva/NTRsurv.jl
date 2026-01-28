@@ -3,7 +3,7 @@ function surv_mat(l::Int64,t::Vector{Float64},model::ModelNTR)
     for i in 1:l
         S_mat[:,i] = posterior_sim(t,model)
     end
-    return S
+    return S_mat
 end
 
 function cred_band_mat(S::Array{Float64,2},m::Int64)

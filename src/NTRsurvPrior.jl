@@ -112,24 +112,29 @@ An immutable type for baseline setting of neutral to the right (NTR) priors:
 
 struct BaselineNTR
     κ::Function 
-    dκ::Function 
+    dκ::Function
+    κinv::Function
 end
 
 function BaselineNTR(κ::Function)
-    return BaselineNTR(κ,zero)
+    return BaselineNTR(κ,zero,zero)
+end
+
+function BaselineNTR(κ::Function,dκ::Function)
+    return BaselineNTR(κ,dκ,zero)
 end
 
 function ExponentialBaseline(λ::Float64)
     r = λ[1]
-    return BaselineNTR(z->r*z,z->r)
+    return BaselineNTR(z->r*z,z->r,z->z/r)
 end
 
 function WeibullBaseline(λ::Float64,k::Float64)
-    return BaseLineNTR(z->(z/λ)^k,z->k*z^(k-1)/λ^k)
+    return BaseLineNTR(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
 end
 
 function EmpBayesBaseline(data::DataNTR)
-    ExponentialBaseline(mean(data.T))
+    ExponentialBaseline(1/mean(data.T))
 end
 
 function prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
