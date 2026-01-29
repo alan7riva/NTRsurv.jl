@@ -16,3 +16,6 @@ Distributions = "0.25.120"
 IterTools = "1.10.0"
 ProgressMeter = "1.10.4"
 SpecialFunctions = "2.5.1"
+
+[workspace]
+projects = ["docs"]
