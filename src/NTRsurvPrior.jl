@@ -167,11 +167,11 @@ Construct `BaselineNTR` object corresponding to an empirically Bayesian exponent
 hazard with rate which either matches the mean of all 
 observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
 """
-function EmpBayesBaseline(data::DataNTR,exact::Bool)
-    if !exact
-        return ExponentialBaseline(1/mean(data.T))
-    else
+function EmpBayesBaseline(data::DataNTR,exact::Bool=true)
+    if exact
         return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
+    else
+        return ExponentialBaseline(1/mean(data.T))
     end
 end
 
