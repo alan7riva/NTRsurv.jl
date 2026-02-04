@@ -18,7 +18,6 @@ export
     DataNTR,
     DataRegreNTR,
     ExponentialBaseline,
-    EmpBayesBaseline,
     MCMCchainAcc,
     ModelNTR,
     ModelRegreNTR,
@@ -30,6 +29,5 @@ export
     loglikRegreNTR,
     posterior_sim,
     postmeansurv,
-    prior_sim,
-    WeibullBaseline
+    prior_sim
 end

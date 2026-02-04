@@ -6,18 +6,19 @@ associated sufficient statistics for NTR model fitting when there are no repetit
 on the observations.
 The type has the following fields:
 
-- `T::Vector{Float64}`: Sorted observation times.
-- `δ::Vector{Int64}`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-- `n::Int64`: Number of observations.
-- `R₁::Vector{Int64}`: Number of at risk observations after and including \$T_{(j)}\$.
-- `R₂::Vector{Int64}`: Number of at risk observations after \$T_{(j)}\$.
+* `T`: Sorted observation times.
+* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+* `n`: Number of observations.
+* `R₁`: Number of at risk observations after and including \$T_{(j)}\$.
+* `R₂`: Number of at risk observations after \$T_{(j)}\$.
 """
+
 struct DataNTRnorep
     T::Vector{Float64}
     δ::Vector{Int64}
     n::Int64
-    R₁::Vector{Int64} 
-    R₂::Vector{Int64} 
+    R₁::Array{Int64,1} # 
+    R₂::Array{Int64,1} 
 end
 
 
@@ -44,14 +45,15 @@ associated sufficient statistics for NTR model fitting when there are repetition
 on the observations.
 The type has the following fields:
 
-- `T`: Sorted unique observation times.
-- `δ`: Exact observation indicator, 1 if at least one exact observation corresponds and 0 otherwise, in `T`.
-- `n`: Number of unique observations.
-- `nᵉ`: Number of multiplicities for exact observations in `T``.
-- `nᶜ`: Number of multiplicities for exact observations in `T``.
-- `R₁`: Number of at risk observations after and including \$T_{(j)}\$.
-- `R₂`: Number of at risk observations after \$T_{(j)}\$.
+* `T`: Sorted unique observation times.
+* `δ`: Exact observation indicator, 1 if at least one exact observation corresponds and 0 otherwise, in `T`.
+* `n`: Number of unique observations.
+* `nᵉ`: Number of multiplicities for exact observations in `T``.
+* `nᶜ`: Number of multiplicities for exact observations in `T``.
+* `R₁`: Number of at risk observations after and including \$T_{(j)}\$.
+* `R₂`: Number of at risk observations after \$T_{(j)}\$.
 """
+
 struct DataNTRrep
     T::Vector{Float64}
     δ::Vector{Int64}
@@ -83,16 +85,9 @@ end
 """
     DataNTR
 
-Union type representing survival data objects for possibly censored to the right survival data in NTR models.
-
-`DataNTR` is an alias for the union of internal data objects `DataNTRnorep` and `DataNTRrep`, corresponding respectively to datasets without and 
-with repeated event times.
-    
-    DataNTR(T::Vector{Float64}, δ::Vector{Int64})
-
-Constructor for `DataNTR` with observed event times `T` and censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
-`δ[i] = 0` denotes right censoring.
+Union immutable type for data in general
 """
+
 const DataNTR = Union{DataNTRnorep, DataNTRrep}
 
 function DataNTR(T::Vector{Float64}, δ::Vector{Int64})
@@ -109,22 +104,12 @@ end
 """
     BaselineNTR
 
-Immutable object for baseline specification of NTR prior.
+An immutable type for baseline setting of neutral to the right (NTR) priors:
 
-`BaselineNTR` is specified by a cumulative hazard function and, optionally,
-its hazard rate and inverse cumulative hazard.
-
-    BaselineNTR(κ::Function)
-    BaselineNTR(κ::Function, dκ::Function)
-    BaselineNTR(κ::Function, dκ::Function, κinv::Function)
-
-Missing fields are set to zero and must be supplied if required for likelihood evaluation or simulation purposes.
-
-# Fields
-- `κ::Function`: A priori cumulative hazard.
-- `dκ::Function`: A priori hazard rate. Needed for likelihood evaluations.
-- `κinv::Function`: A priori inverse cumulative hazard. Can be needed for simulation purposes outisde of NTRsurv's workflow.
+* `κ`: A priori cumulative hazard.
+* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
 """
+
 struct BaselineNTR
     κ::Function 
     dκ::Function
@@ -139,48 +124,19 @@ function BaselineNTR(κ::Function,dκ::Function)
     return BaselineNTR(κ,dκ,zero)
 end
 
-"""
-    ExponentialBaseline(λ::Float64)
-
-Construct `BaselineNTR` object corresponding to an exponential baseline
-hazard with rate parameter `λ`.
-"""
 function ExponentialBaseline(λ::Float64)
     r = λ[1]
     return BaselineNTR(z->r*z,z->r,z->z/r)
 end
 
-"""
-    WeibullBaseline(λ::Float64, k::Float64)
-
-Construct `BaselineNTR` object corresponding to a Weibull baseline
-hazard with scale parameter `λ` and shape parameter `k`.
-"""
 function WeibullBaseline(λ::Float64,k::Float64)
     return BaseLineNTR(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
 end
 
-"""
-    EmpBayesBaseline(data::DataNTR,exact::Bool=false)
-
-Construct `BaselineNTR` object corresponding to an empirically Bayesian exponential baseline
-hazard with rate which either matches the mean of all 
-observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
-"""
-function EmpBayesBaseline(data::DataNTR,exact::Bool)
-    if !exact
-        return ExponentialBaseline(1/mean(data.T))
-    else
-        return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
-    end
+function EmpBayesBaseline(data::DataNTR)
+    ExponentialBaseline(1/mean(data.T))
 end
 
-"""
-    prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
-
-Function for prior simulation, over a grid of positive values `t`, of NTR prior with variance modulating parameter `α` and`baseline` object specification.
-Intended for prior elicitation before model setting.` 
-"""
 function prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
     β = 1.0/log(1.0+1.0/α)
     κ = baseline.κ
@@ -189,6 +145,16 @@ function prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
     end
     return [1.0;exp.( -cumsum( [ rand(Gamma(β*(κ(t[i])-κ(t[i-1])),1/α)) for i in 2:length(t) ] ) )]
 end
+
+"""
+    ModelNTR
+
+An immutable type for the NTR model framweork 
+* `data`: Data struct with no repetitions in the obsevrations.
+* `baseline`: A priori baseline for centering of NTR survival curves.
+* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+* `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
+"""
 
 struct ModelNTRnorep
     α::Float64 
@@ -204,20 +170,6 @@ struct ModelNTRrep
     data::DataNTRrep
 end
 
-"""
-    ModelNTR
-
-Union type representing NTR models for possibly censored to the right survival data.
-
-`ModelNTR` is an alias for the union of internal structs `ModelNTRnorep` and `ModelNTRrep`, corresponding respectively to modeling of datasets without and 
-with repeated event times.
-    
-    ModelNTR(α::Float64,baseline::BaselineNTR,data::DataNTR
-    ModelNTR(α::Float64,data::DataNTR)
-
-Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
-If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
-"""
 const ModelNTR = Union{ModelNTRnorep, ModelNTRrep}
 
 function ModelNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
@@ -236,10 +188,17 @@ function ModelNTR(α::Float64,data::DataNTR)
 end
 
 """
-    postmeansurvt::Array{Float64},model::ModelNTR)
+    postmeansurv
 
-Function for posterior mean survival curve evaluation in NTR `model` over a grid of positive values `t`.
+Function for posterior mean survival curve evaluation over a grid
+
+* `t`: Time grid where posterior mean survival is evaluated.
+* `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
+* `baseline`: Baseline struct for NTR models.
+* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+* `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
+
 function postmeansurv(t::Array{Float64},model::ModelNTRnorep)
     if t[1] != 0.0
         t = [0.0;t]
@@ -339,6 +298,7 @@ Function for posterior simulation of weights at fixed locations corresponding to
 * `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
+
 function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRnorep)
     α = model.α
     R₂ = model.data.R₂
@@ -367,11 +327,16 @@ function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRrep)
     return Y
 end
 
+
 """
    posterior_sim
 
-Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
+Function for simulation of posterior survival curves in a grid of values using the analytical distribution of the increments.
+
+* `t`: Time grid where posterior mean survival is evaluated.
+* `model`: Model struct for NTR models.
 """
+
 function posterior_sim(t::Array{Float64},model::ModelNTR)
     if t[1] != 0.0
         t = [0.0;t]
@@ -418,9 +383,12 @@ end
 """
     loglikNTR
 
-Function for log-likelihood evaluation of NTR model with a priori variance modulating parameterof `α` 
-`baseline` object specification, and survival data object `data`.
+Function for log-likelihood of α in NTR framework with two methods 
+
+* `α`: Variance modulation parameter.
+* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
 """
+
 function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
     l = 0.0
     κ = baseline.κ

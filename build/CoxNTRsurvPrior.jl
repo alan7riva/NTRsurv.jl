@@ -36,17 +36,17 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-- `To`: Sorted observation times.
-- `T`: Sorted unique observation times.
-- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-- `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-- `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-- `Z`: Covariates for sorted observation times `T`.
-- `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
-- `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
-- `n`: Number of observations.
-- `m`: Number of unique observations.
-- `nᵉ`: Frequencies of unique exact observations
+* `To`: Sorted observation times.
+* `T`: Sorted unique observation times.
+* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+* `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+* `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+* `Z`: Covariates for sorted observation times `T`.
+* `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
+* `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
+* `n`: Number of observations.
+* `m`: Number of unique observations.
+* `nᵉ`: Frequencies of unique exact observations
 """
 
 struct DataRegreNTRrep
@@ -102,21 +102,20 @@ end
 """
     BaselineRegreNTR
 
-Immutable object for baseline specification of Cox regression with NTR prior
+An immutable type for baseline setting of Cox regression neutral to the right (NTR) priors:
 
-- `κ`: A priori cumulative hazard.
-- `dκ`: A priori hazard rate. Needed for likelihood evaluations.
-- `f`: Regression function
+* `κ`: A priori cumulative hazard.
+* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
+* `f`: Regression function
 """
-struct BaselineGenRegreNTR
+
+struct BaselineRegreNTR
     b::BaselineNTR
     f::Function
-    g::Function
-    ∂g::Function
 end
 
-function BaselineRegreNTR(κ::Function,dκ::Function,f::Function,g::Function,∂g::Function)
-    return BaselineGenRegreNTR( BaselineNTR(κ,dκ), f, g, ∂g)
+function BaselineRegreNTR(κ::Function,dκ::Function,f::Function)
+    return BaselineRegreNTR( BaselineNTR(κ,dκ), f)
 end
 
 """
@@ -129,42 +128,33 @@ Function for sufficient statistics in Cox regression NTR model.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
 
-function SuffStatsGenRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::BaselineGenRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
     n=data.n
-    T = data.T
     δ = data.δ
     Z = data.Z
     f = baseline.f
-    g = baseline.g
-    gT = [ g(c,T[i],Z[i]) for i in 1:n ]
-    gsp = sortperm(gT)
-    gT = gT[gsp]
-    hᵉ = [ (δ[i]==1) ? f(c,T[i],Z[i]) : 0.0 for i in gsp ] # frequencies of exact bservations
-    hᶜ = [ (δ[i]==0) ? f(c,T[i],Z[i]) : 0.0 for i in gsp ] # frequencies of censored observations
+    hᵉ = [ (δ[i]==1) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of exact bservations
+    hᶜ = [ (δ[i]==0) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
-    return R₁, R₂, hᵉ, gT
+    return R₁, R₂, hᵉ
 end
 
-function SuffStatsGenRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,baseline::BaselineGenRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,baseline::BaselineRegreNTR)
     m = data.m
     Zᵉ = data.Zᵉ
     Zᶜ = data.Zᶜ 
     f = baseline.f
-    g = baseline.g
-    gT = [ g(c,T[i],Z[i]) for i in 1:n ]
-    gsp = sortperm(gT)
-    gT = gT[gsp]
-    hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in gsp ] 
-    hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in gsp ]
+    hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
+    hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
-    F = [ [ [ length(v), sum( [ f(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in gsp ]
-    return R₁, R₂, F, gT
+    F = [ [ [ length(v), sum( [ f(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:m ]
+    return R₁, R₂, F
 end
 
 """
