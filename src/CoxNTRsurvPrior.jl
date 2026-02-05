@@ -6,12 +6,11 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-* `T`: Sorted observation times.
-* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-* `Z`: Covariates for sorted observation times `T`.
-* `n`: Number of observations.
+- `T`: Sorted observation times.
+- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+- `Z`: Covariates for sorted observation times `T`.
+- `n`: Number of observations.
 """
-
 struct DataRegreNTRnorep
     T::Vector{Float64} 
     δ::Vector{Int64}
@@ -36,17 +35,17 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-* `To`: Sorted observation times.
-* `T`: Sorted unique observation times.
-* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-* `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `Z`: Covariates for sorted observation times `T`.
-* `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
-* `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
-* `n`: Number of observations.
-* `m`: Number of unique observations.
-* `nᵉ`: Frequencies of unique exact observations
+- `To`: Sorted observation times.
+- `T`: Sorted unique observation times.
+- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+- `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `Z`: Covariates for sorted observation times `T`.
+- `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
+- `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
+- `n`: Number of observations.
+- `m`: Number of unique observations.
+- `nᵉ`: Frequencies of unique exact observations
 """
 
 struct DataRegreNTRrep
@@ -83,9 +82,17 @@ end
 """
     DataRegreNTR
 
-Union immutable type for data in general
-"""
+Union type representing survival data objects for possibly censored to the right survival data with covariates in 
+Cox NTR models.
 
+`DataRegreNTR` is an alias for the union of internal data objects `DataRegreNTRnorep` and `DataRegreNTRrep`, corresponding respectively to datasets without and 
+with repeated event times.
+    
+    DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+
+Constructor for `DataNTR` with observed event times `T`, censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
+`δ[i] = 0` denotes right censoring, and covariates Z.
+"""
 const DataRegreNTR = Union{DataRegreNTRnorep, DataRegreNTRrep}
 
 function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
@@ -108,14 +115,44 @@ An immutable type for baseline setting of Cox regression neutral to the right (N
 * `dκ`: A priori hazard rate. Needed for likelihood evaluations.
 * `f`: Regression function
 """
+"""
+    BaselineRegreNTR
 
+Immutable object for baseline specification of Cox NTR priors.
+
+`BaselineRegreNTR` is specified by a Cox-baseline cumulative hazard function,
+its hazard rate and optionally its inverse cumulative hazard.
+
+    BaselineRegreNTR(b::BaselineNTR, f::Function)
+    BaselineRegreNTR((b::BaselineNTR, f::Function)
+    BaselineRegreNTR(v::Tuple{Function},f::Function)
+    BaselineRegreNTR(v::Tuple{Function})
+
+Missing `f` field is set to Cox regression specification by default. If either `v=(κ,dκ)` or `v=(κ,dκ,κinv)` are prvided 
+then a BaselineNTR instantiated with those fields is used.
+
+# Fields
+- `b::BaselineNTR`: Cox-baseline.
+- `f::Function`: Regressión function, if missing defaults to `f(c,z)=exp(c'*z)`.
+"""
 struct BaselineRegreNTR
     b::BaselineNTR
     f::Function
 end
 
-function BaselineRegreNTR(κ::Function,dκ::Function,f::Function)
-    return BaselineRegreNTR( BaselineNTR(κ,dκ), f)
+function BaselineRegreNTR(b::BaselineNTR)
+    f(c::Vector{Float64},z::Vector{Float64}) = exp(c'*z) 
+    return BaselineRegreNTR( b, f)
+end
+
+function BaselineRegreNTR(v::Tuple{Function},f::Function)
+    b = BaselineNTR(v...)
+    return BaselineRegreNTR( b, f)
+end
+
+function BaselineRegreNTR(v::Tuple{Function})
+    b = BaselineNTR(v...)
+    return BaselineRegreNTR( b)
 end
 
 """
