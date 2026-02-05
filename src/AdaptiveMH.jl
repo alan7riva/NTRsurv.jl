@@ -33,7 +33,7 @@ end
     s_run = copy(s)
     lfs_run = lfs
     for j in 2:b
-        s_run, lfs_run = RandWalkMHstep( lf, d, s_run, lfs_run, prop_σ)
+        s_run, lfs_run = RandWalkMHstep( lf, s_run, lfs_run, prop_σ)
         chain_s[j] = copy(s_run)
     end
     return chain_s, lfs_run
@@ -66,6 +66,12 @@ end
     return chain_s, lfs_run
 end
 
+function MCMCchainAcc(v::Vector{Float64})
+    l = length(v)
+    rej = length( findall( j-> v[j+1] != v[j], collect(1:(l-1)) ) )
+    return rej/(l-1)
+end
+
 function MCMCchainAcc(v::Vector{Vector{Float64}})
     l = length(v)
     d = length(v[1])
@@ -96,14 +102,14 @@ end
     for i in 2:(n+1)
         c_s_tmp, lfs_run = RandWalkMH( b, lf, s_run, lfs_run, c_σ[i-1])
         s_run = c_s_tmp[end]
-        c_θ[i] = c_θ[i-1] .+ (1/i^γ).*( MCMCchainAcc(c_s_tmp) .- p_acc )
-        c_σ[i] = exp.(c_θ[i])
+        c_θ[i] = c_θ[i-1] + (1/i^γ)*( MCMCchainAcc(c_s_tmp) - p_acc )
+        c_σ[i] = exp(c_θ[i])
         next!(prog)
     end
     return c_σ, s_run, lfs_run
 end
 
-@inline function RobMonMHwithinGIBBStuneWithoutProg(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
+@inline function RobMonMHtuneWithoutProg(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
         p_acc::Float64,γ::Float64)
     s_run = s₀
     lfs_run = lf(s₀)

@@ -107,44 +107,12 @@ function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Fl
 end
 
 """
-    BaselineRegreNTR
+    cox_f
 
-Immutable object for baseline specification of Cox NTR priors.
-
-`BaselineRegreNTR` is specified by a Cox-baseline cumulative hazard function,
-its hazard rate and optionally its inverse cumulative hazard.
-
-    BaselineRegreNTR(b::BaselineNTR, f::Function)
-    BaselineRegreNTR((b::BaselineNTR, f::Function)
-    BaselineRegreNTR(v::Tuple{Function},f::Function)
-    BaselineRegreNTR(v::Tuple{Function})
-
-Missing `f` field is set to Cox regression specification by default. If either `v=(κ,dκ)` or `v=(κ,dκ,κinv)` are prvided 
-then a BaselineNTR instantiated with those fields is used.
-
-# Fields
-- `b::BaselineNTR`: Cox-baseline.
-- `f::Function`: Regressión function, if missing defaults to `f(c,z)=exp(c'*z)`.
+Cox regression risk score.
 """
-struct BaselineRegreNTR
-    b::BaselineNTR
-    f::Function
-end
+cox_f(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
 
-function BaselineRegreNTR(b::BaselineNTR)
-    f(c::Vector{Float64},z::Vector{Float64}) = exp(c'*z) 
-    return BaselineRegreNTR( b, f)
-end
-
-function BaselineRegreNTR(v::Tuple{Function},f::Function)
-    b = BaselineNTR(v...)
-    return BaselineRegreNTR( b, f)
-end
-
-function BaselineRegreNTR(v::Tuple{Function})
-    b = BaselineNTR(v...)
-    return BaselineRegreNTR( b)
-end
 
 """
    SuffStatsRegreNTR
@@ -155,11 +123,10 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,f::Function)
     n=data.n
     δ = data.δ
     Z = data.Z
-    f = baseline.f
     hᵉ = [ (δ[i]==1) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of exact bservations
     hᶜ = [ (δ[i]==0) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
@@ -169,11 +136,10 @@ function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::
     return R₁, R₂, hᵉ
 end
 
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,f::Function)
     m = data.m
     Zᵉ = data.Zᵉ
     Zᶜ = data.Zᶜ 
-    f = baseline.f
     hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
     hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
@@ -194,14 +160,14 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
     l = 0.0
-    κ = baseline.b.κ
-    dκ = baseline.b.dκ
+    κ = baseline.κ
+    dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     n = data.n
     X =  [0.0;data.T]
-    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,baseline)
+    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,f)
     δ = data.δ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( log( 1.0 + hᵉ[k]/(R₂[k]+α) ) )
@@ -214,16 +180,14 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRnorep,base
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
     l = 0.0
-    κ = baseline.b.κ
-    dκ = baseline.b.dκ
-    f = baseline.f
+    κ = baseline.κ
+    dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     m = data.m
-    Zᵉ = data.Zᵉ
     X =  [0.0;data.T]
-    R₁, R₂, F = SuffStatsRegreNTR(c,data,baseline)
+    R₁, R₂, F = SuffStatsRegreNTR(c,data,f)
     nᵉ = data.nᵉ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )    
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^(v[1]+1) * log( (R₂[k] + α + v[2])/α ) for v in F[k] ] ) )
@@ -236,51 +200,69 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRrep,baseli
     return l
 end
 
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTR)
+    return loglikRegreNTR(c,α,baseline,cox_f,data)
+end
+
 """
     NTRmodelRegre
 
 An immutable type for the NTR model framweork 
-* `data`: Data struct with no repetitions in the obsevrations.
-* `baseline`: Baseline struct for Cox regression NTR models.
-* `c`: Vector of parameters for Cox regression functions.
-* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
-* `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
-* `R₁`: Sufficient statistic for number of at risk observations after and including T_{(j)} factors.
-* `R₂`: Sufficient statistic for number of at risk observations after T_{(j)} factors.
-* `hᵉ`: Sufficient statistic for exact observation covariate factors.
+- `data`: Data struct with no repetitions in the obsevrations.
+- `baseline`: Baseline struct for Cox regression NTR models.
+- `c`: Vector of parameters for Cox regression functions.
+- `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+- `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
+- `R₁`: Sufficient statistic for number of at risk observations after and including T_{(j)} factors.
+- `R₂`: Sufficient statistic for number of at risk observations after T_{(j)} factors.
+- `hᵉ`: Sufficient statistic for exact observation covariate factors.
 """
 
 struct ModelRegreNTRnorep
-    data::DataRegreNTRnorep
-    baseline::BaselineRegreNTR
-    c::Vector{Float64}
     α::Float64 
-    β::Float64 
+    β::Float64
+    baseline::BaselineNTR
+    c::Vector{Float64}
+    data::DataRegreNTRnorep 
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
 end
 
 struct ModelRegreNTRrep
-    data::DataRegreNTRrep
-    baseline::BaselineRegreNTR
-    c::Vector{Float64}
     α::Float64
     β::Float64
+    baseline::BaselineNTR
+    c::Vector{Float64}
+    data::DataRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
 end
 
+"""
+    ModelRegreNTR
+
+Union type representing Cox NTR models for possibly censored to the right survival data with covariates.
+
+`ModelRegreNTR` is an alias for the union of internal structs `ModelRegreNTRnorep` and `ModelRegreNTRrep`, corresponding respectively to modeling of datasets without and 
+with repeated event times.
+    
+    ModelRegreNTR(b::Vector{Float64},α::Float64,baseline::BaselineRegreNTR,data::DataRegreNTR)
+    ModelRegreNTR(α::Float64,data::DataNTR)
+
+Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
+If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
+"""
 const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
     s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
     return ModelRegreNTRnorep( data, baseline, c, α, β, s1, s2, s3)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRrep,baseline::BaselineNTR)
     β = 1.0/log(1.0+1.0/α)
     s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
     return ModelRegreNTRrep( data, baseline, c, α, β, s1, s2, s3)

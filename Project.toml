@@ -1,11 +1,15 @@
 name = "NTRsurv"
 uuid = "44a71bb7-9d27-4d6a-8d2f-9a31f1763d85"
-authors = ["alan7riva <alan@sigma.iimas.unam.mx>"]
 version = "0.1.0"
+authors = ["alan7riva <alan@sigma.iimas.unam.mx>"]
+
+[workspace]
+projects = ["docs"]
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 IterTools = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
@@ -13,9 +17,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 [compat]
 DataFrames = "1.7.0"
 Distributions = "0.25.120"
+IJulia = "1.34.1"
 IterTools = "1.10.0"
-ProgressMeter = "1.10.4"
+ProgressMeter = "1.11.0"
 SpecialFunctions = "2.5.1"
-
-[workspace]
-projects = ["docs"]

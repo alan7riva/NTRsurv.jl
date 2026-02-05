@@ -5,6 +5,7 @@ module NTRsurv
 using Distributions, ProgressMeter
 import SpecialFunctions: gamma
 import IterTools: subsets
+ProgressMeter.ijulia_behavior(:append)
 
 
 include("NTRsurvPrior.jl")
@@ -14,7 +15,6 @@ include("utils.jl")
 
 export
     BaselineNTR,
-    BaselineRegreNTR,
     DataNTR,
     DataRegreNTR,
     ExponentialBaseline,
@@ -22,7 +22,7 @@ export
     MCMCchainAcc,
     ModelNTR,
     ModelRegreNTR,
-    RobMonMHStune,
+    RobMonMHtune,
     RobMonMHwithinGIBBStune,
     RandWalkMH,
     RandWalkMHwithinGibbs,
