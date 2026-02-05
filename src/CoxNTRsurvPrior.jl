@@ -109,15 +109,6 @@ end
 """
     BaselineRegreNTR
 
-An immutable type for baseline setting of Cox regression neutral to the right (NTR) priors:
-
-* `κ`: A priori cumulative hazard.
-* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
-* `f`: Regression function
-"""
-"""
-    BaselineRegreNTR
-
 Immutable object for baseline specification of Cox NTR priors.
 
 `BaselineRegreNTR` is specified by a Cox-baseline cumulative hazard function,
@@ -164,7 +155,6 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-
 function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
     n=data.n
     δ = data.δ
@@ -204,7 +194,6 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-
 function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
     l = 0.0
     κ = baseline.b.κ
