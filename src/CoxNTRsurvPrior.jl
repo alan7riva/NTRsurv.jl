@@ -180,7 +180,7 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Fun
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,c,data::DataRegreNTRrep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ
@@ -219,10 +219,11 @@ An immutable type for the NTR model framweork
 """
 
 struct ModelRegreNTRnorep
+    c::Vector{Float64}
     α::Float64 
     β::Float64
     baseline::BaselineNTR
-    c::Vector{Float64}
+    f::Function
     data::DataRegreNTRnorep 
     R₁::Vector{Float64}
     R₂::Vector{Float64}
@@ -230,10 +231,11 @@ struct ModelRegreNTRnorep
 end
 
 struct ModelRegreNTRrep
+    c::Vector{Float64}
     α::Float64
     β::Float64
     baseline::BaselineNTR
-    c::Vector{Float64}
+    f::Function
     data::DataRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
@@ -256,16 +258,20 @@ If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 """
 const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTRnorep)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
-    return ModelRegreNTRnorep( data, baseline, c, α, β, s1, s2, s3)
+    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
+    return ModelRegreNTRnorep( c, α, β, baseline, f, data, s1, s2, s3)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRrep,baseline::BaselineNTR)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
-    return ModelRegreNTRrep( data, baseline, c, α, β, s1, s2, s3)
+    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
+    return ModelRegreNTRrep( c, α, β, baseline, f, s1, s2, s3)
+end
+
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTR)
+    return ModelRegreNTR( c, α, baseline, cox_f, data)
 end
 
 """
