@@ -180,7 +180,7 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Fun
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,c,data::DataRegreNTRrep)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTRrep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ
@@ -285,17 +285,16 @@ Function for posterior mean survival curve evaluation over a grid
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 * `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
-
-function postmeansurv(t::Vector{Float64},x_new::Vector{Float64},model::ModelRegreNTRnorep)
+function postmeansurv(t::Vector{Float64},z_new::Vector{Float64},model::ModelRegreNTRnorep)
     if t[1] != 0.0
         t = [0.0;t]
     end
     S = [1.0]
     l = length(t)
-    κ = model.baseline.b.κ
+    κ = model.baseline.κ
     c = model.c
     α = model.α
-    ν = model.baseline.f(model.c,x_new) 
+    ν = model.f(model.c,z_new) 
     β = model.β
     n = model.data.n
     X =  [0.0;model.data.T]
@@ -339,10 +338,10 @@ function postmeansurv(t::Vector{Float64},x_new::Vector{Float64},model::ModelRegr
     end
     S = [1.0]
     l = length(t)
-    κ = model.baseline.b.κ
+    κ = model.baseline.κ
     c = model.c
     α = model.α
-    ν = model.baseline.f(c,x_new) 
+    ν = model.f(c,x_new) 
     β = model.β
     X =  [0.0;model.data.T]
     nᵉ = [model.data.nᵉ;0]
@@ -384,11 +383,10 @@ end
 
 Function for posterior simulation of weights at fixed locations corresponding to exact observations. 
 
-* `l`: Number of simulaions from the vector of posterior weights.
-* `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
-* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+- `l`: Number of simulaions from the vector of posterior weights.
+- `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
+- `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-
 function post_fix_locw_GammaNTR_accrej(z_new::Vector{Float64},l::Int64,model::ModelRegreNTRnorep)
     n = model.data.n
     δ = model.data.δ
@@ -491,8 +489,7 @@ Function for simulation of posterior survival curves in a grid of values using t
 * `t`: Time grid where posterior mean survival is evaluated.
 * `model`: Model struct for NTR models.
 """
-
-function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRegreNTR)
+function posterior_sim(t::Vector{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
     if t[1] != 0.0
         t = [0.0;t]
     end
@@ -500,8 +497,8 @@ function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRe
     l = length(t)
     α = model.α
     β = model.β
-    ν = model.baseline.f(model.c,z_new) 
-    κ = model.baseline.b.κ
+    ν = model.f(model.c,z_new) 
+    κ = model.baseline.κ
     X =  [0.0;model.data.T]
     δ = [model.data.δ;0]
     R₁ = model.R₁
@@ -533,63 +530,4 @@ function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRe
         end
     end
     return S
-end
-
-"""
-   posterior_sim
-
-Function for simulation of posterior survival curves in a grid of values using the analytical distribution of the increments.
-
-* `t`: Time grid where posterior mean survival is evaluated.
-* `model`: Model struct for NTR models.
-"""
-
-function posterior_sim_prev(z_new::Array{Float64,1},model::ModelRegreNTR,t::Vector{Float64})
-    X = model.data.T
-    X0 = [0.0;X]
-    Xend = X[end]
-    n = length(t)
-    t0 = copy(t)
-    Y = zeros(n)
-    if t[1] == 0.0
-        t = t[2:end]
-        n -= 1
-    else
-        t0 = [0.0;t]
-    end
-    i_first = findlast( t .<= X[1] )
-    i_last = findlast( t .<= Xend )
-    δ = model.data.δ
-    c = model.c
-    α = model.α
-    ν = model.baseline.f(c,z_new) 
-    β = model.β
-    R₁ = model.R₁
-    κ = model.baseline.b.κ
-    W_fix = post_fix_locw_GammaNTR_accrej(z_new,1,model)
-    n_fix = 0
-    n_aux= 1
-    if isnothing(i_first) 
-        i_first = 0
-    else
-        X0[1] = t[i_first]
-    end
-    for i in 2:(i_first+1)
-        cont_incr = rand(Gamma( β*(κ(t0[i]) - κ(t0[i-1])), 1/(α+R₁[i]+ν)))
-        Y[i] = Y[i-1] + cont_incr
-    end
-    for i in (i_first+2):i_last
-        ind  =  findall( X[n_aux:end] .<= t[i] ) .+ (n_aux -1)
-        n_fix_incr =  sum( δ[ind], init=0)  + n_fix
-        disc_incr = sum(W_fix[(n_fix+1):n_fix_incr], init=0.0)        
-        cont_incr = sum( [ rand(Gamma( β*(κ(X[j]) - κ(X0[j])), 1/(α+R₁[j]+ν))) for j in ind ], init=0.0)
-        Y[i] = Y[i-1] + disc_incr + cont_incr
-        n_aux += length(ind)
-        n_fix = n_fix_incr
-    end  
-    for i in (i_last+1):(n+1)
-        cont_incr = rand(Gamma( β*(κ(t0[i]) - κ(t0[i-1])), 1/(α+ν)))
-        Y[i] = Y[i-1] + cont_incr
-    end
-    return exp.(-Y)
 end
