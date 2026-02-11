@@ -36,17 +36,17 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-* `To`: Sorted observation times.
-* `T`: Sorted unique observation times.
-* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-* `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `Z`: Covariates for sorted observation times `T`.
-* `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
-* `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
-* `n`: Number of observations.
-* `m`: Number of unique observations.
-* `nᵉ`: Frequencies of unique exact observations
+- `To`: Sorted observation times.
+- `T`: Sorted unique observation times.
+- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+- `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `Z`: Covariates for sorted observation times `T`.
+- `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
+- `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
+- `n`: Number of observations.
+- `m`: Number of unique observations.
+- `nᵉ`: Frequencies of unique exact observations
 """
 
 struct DataRegreNTRrep
@@ -102,13 +102,12 @@ end
 """
     BaselineRegreNTR
 
-An immutable type for baseline setting of Cox regression neutral to the right (NTR) priors:
+Immutable object for baseline specification of Cox regression with NTR prior
 
-* `κ`: A priori cumulative hazard.
-* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
-* `f`: Regression function
+- `κ`: A priori cumulative hazard.
+- `dκ`: A priori hazard rate. Needed for likelihood evaluations.
+- `f`: Regression function
 """
-
 struct BaselineGenRegreNTR
     b::BaselineNTR
     f::Function

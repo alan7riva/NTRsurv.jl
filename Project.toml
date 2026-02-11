@@ -12,6 +12,7 @@ Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 IJulia = "7073ff75-c697-5162-941a-fcdaad2a7d2a"
 IterTools = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
 ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
@@ -20,4 +21,5 @@ Distributions = "0.25.120"
 IJulia = "1.34.1"
 IterTools = "1.10.0"
 ProgressMeter = "1.11.0"
+PyPlot = "2.11.6"
 SpecialFunctions = "2.5.1"

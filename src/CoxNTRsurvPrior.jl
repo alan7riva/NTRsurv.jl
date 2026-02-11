@@ -47,7 +47,6 @@ The type has the following fields:
 - `m`: Number of unique observations.
 - `nᵉ`: Frequencies of unique exact observations
 """
-
 struct DataRegreNTRrep
     Tr::Vector{Float64}
     T::Vector{Float64}

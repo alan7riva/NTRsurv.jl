@@ -1,15 +1,12 @@
 using Documenter, NTRsurv
 
-makedocs(sitename="NTRsurv.jl")
-
-
 makedocs(
     modules = [NTRsurv],
     checkdocs = :exports,
     sitename = "NTRsurv.jl",
     authors = "Alan Riva-Palacio",
     pages = [
-        "Home" => "index.md",
+        "Home" => "home.md",
         #"Getting Started" => "getting_started.md",
         #"Event Times" => "events.md",
         #"Kaplan-Meier" => "km.md",

@@ -26,12 +26,11 @@ export
     RobMonMHwithinGIBBStune,
     RandWalkMH,
     RandWalkMHwithinGibbs,
-    SuffStatsRegreNTR,
+    WeibullBaseline,
     cred_band,
     loglikNTR,
     loglikRegreNTR,
     posterior_sim,
     postmeansurv,
-    prior_sim,
-    WeibullBaseline
+    prior_sim
 end

@@ -11,4 +11,7 @@ ModelNTR
 postmeansurv
 posterior_sim
 loglikNTR
+DataRegreNTR
+loglikRegreNTR
+ModelRegreNTR
 ```

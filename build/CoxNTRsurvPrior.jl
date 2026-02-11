@@ -6,12 +6,11 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-* `T`: Sorted observation times.
-* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-* `Z`: Covariates for sorted observation times `T`.
-* `n`: Number of observations.
+- `T`: Sorted observation times.
+- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+- `Z`: Covariates for sorted observation times `T`.
+- `n`: Number of observations.
 """
-
 struct DataRegreNTRnorep
     T::Vector{Float64} 
     δ::Vector{Int64}
@@ -36,17 +35,17 @@ associated sufficient statistics, not depending on the Cox regression coefficien
 model fitting when there are no repetitions on the observations.
 The type has the following fields:
 
-* `To`: Sorted observation times.
-* `T`: Sorted unique observation times.
-* `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
-* `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
-* `Z`: Covariates for sorted observation times `T`.
-* `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
-* `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
-* `n`: Number of observations.
-* `m`: Number of unique observations.
-* `nᵉ`: Frequencies of unique exact observations
+- `To`: Sorted observation times.
+- `T`: Sorted unique observation times.
+- `δ`: Censoring indicators, 1 if exact observation and 0 otherwise, for sorted observation times `T`.
+- `δᵉ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `δᶜ`: Censoring indicators, 1 if exact observation is associated and 0 otherwise, for unique sorted observation times `T`.
+- `Z`: Covariates for sorted observation times `T`.
+- `Zᵉ`: Covariates for sorted unique observation times `T` which are exactly observed, allowing for multiplicities.
+- `Zᶜ`: Covariates for sorted unique observation times `T` which are not exactly observed, allowing for multiplicities.
+- `n`: Number of observations.
+- `m`: Number of unique observations.
+- `nᵉ`: Frequencies of unique exact observations
 """
 
 struct DataRegreNTRrep
@@ -83,9 +82,17 @@ end
 """
     DataRegreNTR
 
-Union immutable type for data in general
-"""
+Union type representing survival data objects for possibly censored to the right survival data with covariates in 
+Cox NTR models.
 
+`DataRegreNTR` is an alias for the union of internal data objects `DataRegreNTRnorep` and `DataRegreNTRrep`, corresponding respectively to datasets without and 
+with repeated event times.
+    
+    DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+
+Constructor for `DataNTR` with observed event times `T`, censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
+`δ[i] = 0` denotes right censoring, and covariates Z.
+"""
 const DataRegreNTR = Union{DataRegreNTRnorep, DataRegreNTRrep}
 
 function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
@@ -100,23 +107,12 @@ function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Fl
 end
 
 """
-    BaselineRegreNTR
+    cox_f
 
-An immutable type for baseline setting of Cox regression neutral to the right (NTR) priors:
-
-* `κ`: A priori cumulative hazard.
-* `dκ`: A priori hazard rate. Needed for likelihood evaluations.
-* `f`: Regression function
+Cox regression risk score.
 """
+cox_f(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
 
-struct BaselineRegreNTR
-    b::BaselineNTR
-    f::Function
-end
-
-function BaselineRegreNTR(κ::Function,dκ::Function,f::Function)
-    return BaselineRegreNTR( BaselineNTR(κ,dκ), f)
-end
 
 """
    SuffStatsRegreNTR
@@ -127,12 +123,10 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,f::Function)
     n=data.n
     δ = data.δ
     Z = data.Z
-    f = baseline.f
     hᵉ = [ (δ[i]==1) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of exact bservations
     hᶜ = [ (δ[i]==0) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
@@ -142,11 +136,10 @@ function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,baseline::
     return R₁, R₂, hᵉ
 end
 
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,f::Function)
     m = data.m
     Zᵉ = data.Zᵉ
     Zᶜ = data.Zᶜ 
-    f = baseline.f
     hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
     hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
@@ -167,15 +160,14 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-
-function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
     l = 0.0
-    κ = baseline.b.κ
-    dκ = baseline.b.dκ
+    κ = baseline.κ
+    dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     n = data.n
     X =  [0.0;data.T]
-    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,baseline)
+    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,f)
     δ = data.δ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( log( 1.0 + hᵉ[k]/(R₂[k]+α) ) )
@@ -188,16 +180,14 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRnorep,base
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTRrep)
     l = 0.0
-    κ = baseline.b.κ
-    dκ = baseline.b.dκ
-    f = baseline.f
+    κ = baseline.κ
+    dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     m = data.m
-    Zᵉ = data.Zᵉ
     X =  [0.0;data.T]
-    R₁, R₂, F = SuffStatsRegreNTR(c,data,baseline)
+    R₁, R₂, F = SuffStatsRegreNTR(c,data,f)
     nᵉ = data.nᵉ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )    
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^(v[1]+1) * log( (R₂[k] + α + v[2])/α ) for v in F[k] ] ) )
@@ -210,54 +200,78 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,data::DataRegreNTRrep,baseli
     return l
 end
 
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTR)
+    return loglikRegreNTR(c,α,baseline,cox_f,data)
+end
+
 """
     NTRmodelRegre
 
 An immutable type for the NTR model framweork 
-* `data`: Data struct with no repetitions in the obsevrations.
-* `baseline`: Baseline struct for Cox regression NTR models.
-* `c`: Vector of parameters for Cox regression functions.
-* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
-* `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
-* `R₁`: Sufficient statistic for number of at risk observations after and including T_{(j)} factors.
-* `R₂`: Sufficient statistic for number of at risk observations after T_{(j)} factors.
-* `hᵉ`: Sufficient statistic for exact observation covariate factors.
+- `data`: Data struct with no repetitions in the obsevrations.
+- `baseline`: Baseline struct for Cox regression NTR models.
+- `c`: Vector of parameters for Cox regression functions.
+- `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+- `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
+- `R₁`: Sufficient statistic for number of at risk observations after and including T_{(j)} factors.
+- `R₂`: Sufficient statistic for number of at risk observations after T_{(j)} factors.
+- `hᵉ`: Sufficient statistic for exact observation covariate factors.
 """
 
 struct ModelRegreNTRnorep
-    data::DataRegreNTRnorep
-    baseline::BaselineRegreNTR
     c::Vector{Float64}
     α::Float64 
-    β::Float64 
+    β::Float64
+    baseline::BaselineNTR
+    f::Function
+    data::DataRegreNTRnorep 
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
 end
 
 struct ModelRegreNTRrep
-    data::DataRegreNTRrep
-    baseline::BaselineRegreNTR
     c::Vector{Float64}
     α::Float64
     β::Float64
+    baseline::BaselineNTR
+    f::Function
+    data::DataRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
 end
 
+"""
+    ModelRegreNTR
+
+Union type representing Cox NTR models for possibly censored to the right survival data with covariates.
+
+`ModelRegreNTR` is an alias for the union of internal structs `ModelRegreNTRnorep` and `ModelRegreNTRrep`, corresponding respectively to modeling of datasets without and 
+with repeated event times.
+    
+    ModelRegreNTR(b::Vector{Float64},α::Float64,baseline::BaselineRegreNTR,data::DataRegreNTR)
+    ModelRegreNTR(α::Float64,data::DataNTR)
+
+Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
+If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
+"""
 const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRnorep,baseline::BaselineRegreNTR)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
-    return ModelRegreNTRnorep( data, baseline, c, α, β, s1, s2, s3)
+    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
+    return ModelRegreNTRnorep( c, α, β, baseline, f, data, s1, s2, s3)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,data::DataRegreNTRrep,baseline::BaselineRegreNTR)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,baseline)
-    return ModelRegreNTRrep( data, baseline, c, α, β, s1, s2, s3)
+    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
+    return ModelRegreNTRrep( c, α, β, baseline, f, s1, s2, s3)
+end
+
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTR)
+    return ModelRegreNTR( c, α, baseline, cox_f, data)
 end
 
 """
@@ -271,17 +285,16 @@ Function for posterior mean survival curve evaluation over a grid
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 * `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
-
-function postmeansurv(t::Vector{Float64},x_new::Vector{Float64},model::ModelRegreNTRnorep)
+function postmeansurv(t::Vector{Float64},z_new::Vector{Float64},model::ModelRegreNTRnorep)
     if t[1] != 0.0
         t = [0.0;t]
     end
     S = [1.0]
     l = length(t)
-    κ = model.baseline.b.κ
+    κ = model.baseline.κ
     c = model.c
     α = model.α
-    ν = model.baseline.f(model.c,x_new) 
+    ν = model.f(model.c,z_new) 
     β = model.β
     n = model.data.n
     X =  [0.0;model.data.T]
@@ -325,10 +338,10 @@ function postmeansurv(t::Vector{Float64},x_new::Vector{Float64},model::ModelRegr
     end
     S = [1.0]
     l = length(t)
-    κ = model.baseline.b.κ
+    κ = model.baseline.κ
     c = model.c
     α = model.α
-    ν = model.baseline.f(c,x_new) 
+    ν = model.f(c,x_new) 
     β = model.β
     X =  [0.0;model.data.T]
     nᵉ = [model.data.nᵉ;0]
@@ -370,11 +383,10 @@ end
 
 Function for posterior simulation of weights at fixed locations corresponding to exact observations. 
 
-* `l`: Number of simulaions from the vector of posterior weights.
-* `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
-* `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
+- `l`: Number of simulaions from the vector of posterior weights.
+- `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
+- `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-
 function post_fix_locw_GammaNTR_accrej(z_new::Vector{Float64},l::Int64,model::ModelRegreNTRnorep)
     n = model.data.n
     δ = model.data.δ
@@ -477,8 +489,7 @@ Function for simulation of posterior survival curves in a grid of values using t
 * `t`: Time grid where posterior mean survival is evaluated.
 * `model`: Model struct for NTR models.
 """
-
-function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRegreNTR)
+function posterior_sim(t::Vector{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
     if t[1] != 0.0
         t = [0.0;t]
     end
@@ -486,8 +497,8 @@ function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRe
     l = length(t)
     α = model.α
     β = model.β
-    ν = model.baseline.f(model.c,z_new) 
-    κ = model.baseline.b.κ
+    ν = model.f(model.c,z_new) 
+    κ = model.baseline.κ
     X =  [0.0;model.data.T]
     δ = [model.data.δ;0]
     R₁ = model.R₁
@@ -519,63 +530,4 @@ function posterior_sim(z_new::Array{Float64,1},t::Vector{Float64},model::ModelRe
         end
     end
     return S
-end
-
-"""
-   posterior_sim
-
-Function for simulation of posterior survival curves in a grid of values using the analytical distribution of the increments.
-
-* `t`: Time grid where posterior mean survival is evaluated.
-* `model`: Model struct for NTR models.
-"""
-
-function posterior_sim_prev(z_new::Array{Float64,1},model::ModelRegreNTR,t::Vector{Float64})
-    X = model.data.T
-    X0 = [0.0;X]
-    Xend = X[end]
-    n = length(t)
-    t0 = copy(t)
-    Y = zeros(n)
-    if t[1] == 0.0
-        t = t[2:end]
-        n -= 1
-    else
-        t0 = [0.0;t]
-    end
-    i_first = findlast( t .<= X[1] )
-    i_last = findlast( t .<= Xend )
-    δ = model.data.δ
-    c = model.c
-    α = model.α
-    ν = model.baseline.f(c,z_new) 
-    β = model.β
-    R₁ = model.R₁
-    κ = model.baseline.b.κ
-    W_fix = post_fix_locw_GammaNTR_accrej(z_new,1,model)
-    n_fix = 0
-    n_aux= 1
-    if isnothing(i_first) 
-        i_first = 0
-    else
-        X0[1] = t[i_first]
-    end
-    for i in 2:(i_first+1)
-        cont_incr = rand(Gamma( β*(κ(t0[i]) - κ(t0[i-1])), 1/(α+R₁[i]+ν)))
-        Y[i] = Y[i-1] + cont_incr
-    end
-    for i in (i_first+2):i_last
-        ind  =  findall( X[n_aux:end] .<= t[i] ) .+ (n_aux -1)
-        n_fix_incr =  sum( δ[ind], init=0)  + n_fix
-        disc_incr = sum(W_fix[(n_fix+1):n_fix_incr], init=0.0)        
-        cont_incr = sum( [ rand(Gamma( β*(κ(X[j]) - κ(X0[j])), 1/(α+R₁[j]+ν))) for j in ind ], init=0.0)
-        Y[i] = Y[i-1] + disc_incr + cont_incr
-        n_aux += length(ind)
-        n_fix = n_fix_incr
-    end  
-    for i in (i_last+1):(n+1)
-        cont_incr = rand(Gamma( β*(κ(t0[i]) - κ(t0[i-1])), 1/(α+ν)))
-        Y[i] = Y[i-1] + cont_incr
-    end
-    return exp.(-Y)
 end
