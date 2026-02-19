@@ -137,8 +137,13 @@ end
 
 function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,f::Function)
     m = data.m
-    Zᵉ = data.Zᵉ
-    Zᶜ = data.Zᶜ 
+    Zᵉ = copy(data.Zᵉ)
+    Zᶜ = copy(data.Zᶜ)
+    l = [  isempty(Zᵉ[i]) ? nothing : findmin([ f(c,v) for v in Zᵉ[i] ])[2] for i in 1:m ]
+    ν = [ isnothing(i) ? 0.0 : f(c,Zᵉ[i]) for i in l ]
+    for i in 1:m
+        deleteat!( Zᵉ[i], l[i] )
+    end
     hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
     hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
@@ -146,7 +151,7 @@ function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,f::Function)
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
     F = [ [ [ length(v), sum( [ f(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:m ]
-    return R₁, R₂, F
+    return R₁, R₂, ν, F
 end
 
 """
@@ -186,10 +191,10 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::
     β = 1.0/log(1.0+1.0/α)
     m = data.m
     X =  [0.0;data.T]
-    R₁, R₂, F = SuffStatsRegreNTR(c,data,f)
+    R₁, R₂, ν, F = SuffStatsRegreNTR(c,data,f)
     nᵉ = data.nᵉ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )    
-    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^(v[1]+1) * log( (R₂[k] + α + v[2])/α ) for v in F[k] ] ) )
+    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^v[1] * log1p(  ν[k]/( α + R₂[k] + v[2]) ) for v in F[k] ] ) )
     for k in 1:m
         l += cont_incr(k)
         if nᵉ[k] > 0
@@ -238,6 +243,7 @@ struct ModelRegreNTRrep
     data::DataRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
+    ν::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
 end
 
@@ -265,8 +271,8 @@ end
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
-    return ModelRegreNTRrep( c, α, β, baseline, f, s1, s2, s3)
+    s1, s2, s3, s4 = SuffStatsRegreNTR(c,data,f)
+    return ModelRegreNTRrep( c, α, β, baseline, f, s1, s2, s3, s4)
 end
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTR)

@@ -21,7 +21,7 @@ function cred_band_mat(S::Array{Float64,2},m::Int64)
             b[i] = maximum(S[i,:])-minimum(S[i,:])
         end
         b_max_index = sortperm(b)[end]
-        s_out_index = findmax( abs.( S[b_max_index,:] .- mean(S[b_max_index,:]) ) )[2]
+        s_out_index = findmax( abs.( S[b_max_index,:] .- median(S[b_max_index,:]) ) )[2]
         S = S[1:end, 1:end .!= s_out_index ]
     end
     return S
@@ -39,7 +39,7 @@ function cred_band( p::Float64, l::Int64,t::Vector{Float64},model::ModelNTR,μ::
             b[i] = maximum(S[i,:])-minimum(S[i,:])
         end
         b_max_index = sortperm(b)[end]
-        s_out_index = findmax( abs.( S[b_max_index,:] .- mean(S[b_max_index,:]) ) )[2]
+        s_out_index = findmax( abs.( S[b_max_index,:] .- median(S[b_max_index,:]) ) )[2]
         S = S[1:end, 1:end .!= s_out_index ]
     end
     band_u = [ maximum(S[i,:]) for i in 1:length(t)]

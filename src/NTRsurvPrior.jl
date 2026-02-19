@@ -376,7 +376,7 @@ function posterior_sim(t::Array{Float64},model::ModelNTR)
     if t[1] != 0.0
         t = [0.0;t]
     end
-    S = [1.0]
+    Y = [0.0]
     l = length(t)
     α = model.α
     β = model.β
@@ -384,34 +384,35 @@ function posterior_sim(t::Array{Float64},model::ModelNTR)
     X =  [0.0;model.data.T]
     δ = [model.data.δ;0]
     R₁ = model.data.R₁
-    cont_incr(k::Int64) = exp( -rand(Gamma( β*(κ(X[k]) - κ(X[k-1])), 1/(α+R₁[k]))) )
-    cont_incr(k::Int64,t::Float64) = exp( -rand(Gamma( β*(κ(t) - κ(X[k-1])), 1/(α+R₁[k]))) )
-    disc_incr(k::Int64) = exp( -post_fix_locw_GammaNTR_accrej(k,model) )
-    cont_fact_run = 1.0
+    # Log-scale for numerical stability
+    cont_incr(k::Int64) = rand(Gamma( β*(κ(X[k]) - κ(X[k-1])), 1/(α+R₁[k])))
+    cont_incr(k::Int64,t::Float64) = rand(Gamma( β*(κ(t) - κ(X[k-1])), 1/(α+R₁[k])))
+    disc_incr(k::Int64) = post_fix_locw_GammaNTR_accrej(k,model)
+    cont_incr_run = 1.0
     n_prev = 1
-    disc_fact_run = 1.0
+    disc_incr_run = 1.0
     l_rec = findlast( t .< X[end] )
     for i in 2:l_rec
         X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
         n_inc = sum(X_inc_ind)
         if n_inc > 0
             n_forw = n_prev + n_inc
-            cont_fact_run = cont_fact_run * mapreduce( j -> cont_incr(j),*,(n_prev+1):n_forw,init=1.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_fact_run = disc_fact_run * mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 1.0,*,(n_prev+1):n_forw,init=1.0) # discrete part factor of decrease running by data observations, no mesh dependence
+            cont_incr_run = cont_incr_run + mapreduce( j -> cont_incr(j), +, (n_prev+1):n_forw, init=0.0) # continuous part factor of decrease running by data observations, no mesh dependence
+            disc_incr_run = disc_incr_run + mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 0.0, +, (n_prev+1):n_forw, init=0.0) # discrete part factor of decrease running by data observations, no mesh dependence
             n_prev =  n_forw
         end
-        push!( S, cont_fact_run*cont_incr(n_prev+1,t[i]) * disc_fact_run )
+        push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i]) + disc_incr_run )
     end
     if l_rec < l
-        cont_fact_run = cont_fact_run * cont_incr(n_prev+1,t[l_rec])
+        cont_incr_run = cont_incr_run + cont_incr(n_prev+1,t[l_rec])
         if δ[end] >=  1
-            disc_fact_run = disc_fact_run*disc_incr(n_prev+1)
+            disc_incr_run = disc_incr_run + disc_incr(n_prev+1)
         end
         for i in (l_rec+1):l
-            push!( S, cont_fact_run*cont_incr(n_prev+1,t[i])*disc_fact_run )
+            push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i])*disc_fact_run )
         end
     end
-    return S
+    return exp.(-Y)
 end
 
 
@@ -459,7 +460,7 @@ function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRrep)
     R₁ = data.R₁
     R₂ = data.R₂
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
-    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] ) ) 
+    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^l * log1p( 1/(α+R₂[k]+l) ) for l in 0:(nᵉ[k]-1) ] ) ) 
     for k in 1:n
         l += cont_incr(k)
         if nᵉ[k] >= 1

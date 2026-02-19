@@ -16,7 +16,7 @@ The package is currently available on GitHub and can be installed using Julia’
 
 ## Dataset
 
-To demonstrate the use of the package on real data, we consider a classical dataset from a clinical trial conducted by the North Central Cancer Treatment Group and described in Loprinzi et al. (1994). The data consist of 228 patients with advanced lung cancer, with survival time measured in days from enrollment and right censoring present. The dataset is widely used in introductory survival analysis tutorials and is included in the R `survival` package.
+To demonstrate the use of the package on real data, we consider a classical dataset from a clinical trial conducted by the North Central Cancer Treatment Group and described in Loprinzi et al. (1994). The data consists of 228 patients with advanced lung cancer, with survival time measured in days from enrollment and right censoring present. The dataset is widely used in introductory survival analysis tutorials and is included in the R `survival` package.
 
 The dataset is distributed with the package as a CSV file in the `test/data/`
 directory and is loaded as a `DataFrame` using the
