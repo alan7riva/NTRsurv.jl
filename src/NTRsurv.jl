@@ -3,6 +3,7 @@
 module NTRsurv
 
 using Distributions, ProgressMeter
+import Statistics: median
 import SpecialFunctions: gamma
 import IterTools: subsets
 ProgressMeter.ijulia_behavior(:append)

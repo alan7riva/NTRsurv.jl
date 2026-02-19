@@ -409,7 +409,7 @@ function posterior_sim(t::Array{Float64},model::ModelNTR)
             disc_incr_run = disc_incr_run + disc_incr(n_prev+1)
         end
         for i in (l_rec+1):l
-            push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i])*disc_fact_run )
+            push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i]) + disc_incr_run )
         end
     end
     return exp.(-Y)
