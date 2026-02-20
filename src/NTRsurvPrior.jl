@@ -386,33 +386,38 @@ function posterior_sim(t::Array{Float64},model::ModelNTR)
     R₁ = model.data.R₁
     # Log-scale for numerical stability
     cont_incr(k::Int64) = rand(Gamma( β*(κ(X[k]) - κ(X[k-1])), 1/(α+R₁[k])))
-    cont_incr(k::Int64,t::Float64) = rand(Gamma( β*(κ(t) - κ(X[k-1])), 1/(α+R₁[k])))
+    cont_incr_1(k::Int64,t::Float64) = rand(Gamma( β*(κ(t) - κ(X[k-1])), 1/(α+R₁[k])))
+    cont_incr_2(k::Int64,t::Float64) = rand(Gamma( β*(κ(X[k]) - κ(t)), 1/(α+R₁[k])))
+    cont_incr_3(k::Int64,t1::Float64,t2::Float64) = rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k])))
     disc_incr(k::Int64) = post_fix_locw_GammaNTR_accrej(k,model)
-    cont_incr_run = 1.0
+    cont_incr_run = 0.0
     n_prev = 1
-    disc_incr_run = 1.0
+    disc_incr_run = 0.0
     l_rec = findlast( t .< X[end] )
     for i in 2:l_rec
         X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
         n_inc = sum(X_inc_ind)
         if n_inc > 0
             n_forw = n_prev + n_inc
-            cont_incr_run = cont_incr_run + mapreduce( j -> cont_incr(j), +, (n_prev+1):n_forw, init=0.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_incr_run = disc_incr_run + mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 0.0, +, (n_prev+1):n_forw, init=0.0) # discrete part factor of decrease running by data observations, no mesh dependence
+            cont_incr_run +=  mapreduce( j -> cont_incr(j), +, (n_prev+1):n_forw, init=0.0) # continuous part factor of decrease running by data observations, no mesh dependence
+            disc_incr_run +=  mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 0.0, +, (n_prev+1):n_forw, init=0.0) # discrete part factor of decrease running by data observations, no mesh dependence
             n_prev =  n_forw
         end
-        push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i]) + disc_incr_run )
+        cont_incr_run += cont_incr_1(n_prev+1,t[i])
+        push!( Y, cont_incr_run + disc_incr_run )
+        cont_incr_run += cont_incr_2(n_prev+1,t[i])
     end
     if l_rec < l
-        cont_incr_run = cont_incr_run + cont_incr(n_prev+1,t[l_rec])
+        cont_incr_run += cont_incr_1(n_prev+1,t[l_rec])
         if δ[end] >=  1
-            disc_incr_run = disc_incr_run + disc_incr(n_prev+1)
+            disc_incr_run += disc_incr(n_prev+1)
         end
         for i in (l_rec+1):l
-            push!( Y, cont_incr_run + cont_incr(n_prev+1,t[i]) + disc_incr_run )
+            cont_incr_run += cont_incr_3(n_prev+1,t[i-1],t[i])
+            push!( Y, cont_incr_run + disc_incr_run )
         end
     end
-    return exp.(-Y)
+    return Y
 end
 
 
