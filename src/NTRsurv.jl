@@ -28,10 +28,10 @@ export
     RandWalkMH,
     RandWalkMHwithinGibbs,
     WeibullBaseline,
-    cred_band,
+    credible_band,
     loglikNTR,
     loglikRegreNTR,
-    posterior_sim,
-    postmeansurv,
-    prior_sim
+    mean_posterior_survival,
+    simulate_prior_survival,
+    simulate_posterior_survival
 end

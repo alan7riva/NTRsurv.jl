@@ -175,19 +175,43 @@ function EmpBayesBaseline(data::DataNTR,exact::Bool=true)
     end
 end
 
+function _simulate_prior_survival( t::Array{Float64}, α::Float64, β::Float64, baseline::BaselineNTR)
+    κ = baseline.κ
+    S = zeros(length(t))
+    S[1] = 1.0
+    cum = 0.0
+    for i in 2:length(t)
+        shape = β * (κ(t[i]) - κ(t[i-1]))
+        cum += rand(Gamma(shape, 1/α))
+        S[i] = exp(-cum)
+    end
+    return S
+end
+
 """
     prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
 
 Function for prior simulation, over a grid of positive values `t`, of NTR prior with variance modulating parameter `α` and`baseline` object specification.
 Intended for prior elicitation before model setting.` 
 """
-function simulate_prior_survival(t::Array{Float64},α::Float64,baseline::BaselineNTR)
-    β = 1.0/log(1.0+1.0/α)
-    κ = baseline.κ
-    if t[1] != 0.0
+function simulate_prior_survival( t::Array{Float64}, α::Float64, baseline::BaselineNTR)
+    if !iszero(t[1])
         t = [0.0;t]
     end
-    return [1.0;exp.( -cumsum( [ rand(Gamma(β*(κ(t[i])-κ(t[i-1])),1/α)) for i in 2:length(t) ] ) )]
+    β = 1.0/log(1.0+1.0/α)
+    return _simulate_prior_survival( t, α, β, baseline)
+end
+
+function simulate_prior_survival( l::Int64, t::Array{Float64}, α::Float64, baseline::BaselineNTR)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    β = 1.0/log(1.0+1.0/α)
+    S_mat = zeros(Float64, l, length(t))
+    for i in 1:l
+        S_mat[i,:] = _simulate_prior_survival( t, α, β, baseline)
+    end
+    return S_mat
 end
 
 struct ModelNTRnorep
@@ -379,28 +403,6 @@ function cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
     return rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k])))
 end
 
-function disc_incr_rep(k::Int64,model::ModelNTR)
-    α = model.α
-    nᵉ = model.data.nᵉ
-    R₂ = model.data.R₂
-    num = 0.0
-    den = 0.0
-    nk = nᵉ[k] - 1
-    R2k = R₂[k]
-    @inbounds for l in 0:nk
-        b = binomial(nk, l) * (-1.0)^(l+1)
-        num += b * log1p(-1/(R2k + α + l + 2))
-        den += b * log1p(-1/(R2k + α + l + 1))
-    end
-    return log(num/den)
-end
-
-function disc_incr_norep(k::Int64,model::ModelNTR) 
-    α = model.α
-    R₂ = model.data.R₂
-    return log( log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) ) )
-end
-
 function disc_incr(k::Int64,model::ModelNTR)
     nᵉ = model.data.nᵉ
     return ( nᵉ[k] == 1 ) ? post_fix_locw_GammaNTR_accrej_norep(k,model) : post_fix_locw_GammaNTR_accrej_rep(k,model)
@@ -426,7 +428,7 @@ function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
             cur = t[i]
             cont_incr_run += cont_incr(j,prev,cur,model)
             prev = cur
-            S[i] = exp( cont_incr_run + disc_incr_run )
+            S[i] = exp( -cont_incr_run - disc_incr_run )
             i += 1
         elseif t[i] > τ[j]
             # survival observation between mesh
@@ -445,7 +447,7 @@ function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
             if nᵉ[j] >= 1
                 disc_incr_run += disc_incr(j,model)
             end
-            S[i] = exp( cont_incr_run + disc_incr_run)
+            S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
             j += 1
         end
@@ -455,7 +457,7 @@ function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
     @inbounds while i ≤ m
         cur = t[i]
         cont_incr_run += cont_incr(j,prev,cur,model)
-        S[i] = exp( cont_incr_run + disc_incr_run )
+        S[i] = exp( -cont_incr_run - disc_incr_run )
         i += 1
         k += 1
     end
@@ -482,7 +484,7 @@ function simulate_posterior_survival( l::Int64, t::Vector{Float64}, model::Model
     for i in 1:l
         S_mat[i,:] = _simulate_posterior_survival( t, model)
     end
-        return 
+    return S_mat
 end
 
 """
