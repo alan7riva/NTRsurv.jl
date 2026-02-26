@@ -181,7 +181,7 @@ end
 Function for prior simulation, over a grid of positive values `t`, of NTR prior with variance modulating parameter `α` and`baseline` object specification.
 Intended for prior elicitation before model setting.` 
 """
-function prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
+function simulate_prior_survival(t::Array{Float64},α::Float64,baseline::BaselineNTR)
     β = 1.0/log(1.0+1.0/α)
     κ = baseline.κ
     if t[1] != 0.0
@@ -235,97 +235,101 @@ function ModelNTR(α::Float64,data::DataNTR)
     return ModelNTR( α, baseline, data)
 end
 
+function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
+    α = model.α
+    β = model.β
+    κ = model.baseline.κ
+    R₁ = model.data.R₁
+    return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+1.0) )
+end
+
+function postmean_disc_incr_rep(k::Int64,model::ModelNTR)
+    α = model.α
+    nᵉ = model.data.nᵉ
+    R₂ = model.data.R₂
+    num = 0.0
+    den = 0.0
+    nk = nᵉ[k] - 1
+    R2k = R₂[k]
+    @inbounds for l in 0:nk
+        b = binomial(nk, l) * (-1.0)^(l+1)
+        num += b * log1p(-1/(R2k + α + l + 2))
+        den += b * log1p(-1/(R2k + α + l + 1))
+    end
+    return log(num/den)
+end
+
+function postmean_disc_incr_norep(k::Int64,model::ModelNTR) 
+    α = model.α
+    R₂ = model.data.R₂
+    return log( log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) ) )
+end
+
+function postmean_disc_incr(k::Int64,model::ModelNTR)
+    nᵉ = model.data.nᵉ
+    return ( nᵉ[k] == 1 ) ? postmean_disc_incr_norep(k,model) : postmean_disc_incr_rep(k,model)
+end
+
 """
-    postmeansurvt::Array{Float64},model::ModelNTR)
+    mean_posterior_survival(t::Array{Float64},model::ModelNTR)
 
 Function for posterior mean survival curve evaluation in NTR `model` over a grid of positive values `t`.
 """
-function postmeansurv(t::Array{Float64},model::ModelNTRnorep)
+function mean_posterior_survival(t::Array{Float64},model::ModelNTR)
     if t[1] != 0.0
         t = [0.0;t]
     end
-    S = [1.0]
-    l = length(t)
-    κ = model.baseline.κ
-    α = model.α
-    β = model.β
-    X =  [0.0;model.data.T]
-    δ = model.data.δ
-    R₁ = model.data.R₁
-    R₂ = model.data.R₂
-    cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    disc_incr(k::Int64) = log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) )
-    cont_fact_run = 1.0
-    n_prev = 1
-    disc_fact_run = 1.0
-    l_rec = findlast( t .< X[end] )
-    for i in 2:l_rec
-        X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
-        n_inc = sum(X_inc_ind)
-        if n_inc > 0
-            n_forw = n_prev + n_inc
-            cont_fact_run = cont_fact_run * mapreduce( j -> cont_incr(j),*,(n_prev+1):n_forw,init=1.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_fact_run = disc_fact_run * mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 1.0,*,(n_prev+1):n_forw,init=1.0) # discrete part factor of decrease running by data observations, no mesh dependence
-            n_prev =  n_forw
+    nᵉ = model.data.nᵉ
+    τ = model.data.T
+    m = length(t)
+    n = length(τ)
+    S = Vector{eltype(t)}(undef, m)
+    S[1] = 1.0
+    # Logarithmic scale for numerical stability
+    cont_incr_run = 0.0
+    disc_incr_run = 0.0
+    i = 2
+    j = 1
+    prev = 0.0
+    k = 2
+    @inbounds while i ≤ m && j ≤ n
+        if t[i] < τ[j]
+            # no survival observation between mesh
+            cur = t[i]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+            prev = cur
+            S[i] = exp( cont_incr_run + disc_incr_run )
+            i += 1
+        elseif t[i] > τ[j]
+            # survival observation between mesh
+            cur = τ[j]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+            cur = prev
+            if nᵉ[j] >= 1
+                disc_incr_run += postmean_disc_incr(j,model)
+            end
+            j += 1
+        else
+            # fringe reptition case
+            cur = τ[j]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+            prev = cur
+            if nᵉ[j] >= 1
+                disc_incr_run += postmean_disc_incr(j,model)
+            end
+            S[i] = exp( cont_incr_run + disc_incr_run)
+            i += 1
+            j += 1
         end
-        push!( S, cont_fact_run*cont_incr(n_prev+1,t[i]) * disc_fact_run )
+        k += 1
     end
-    if l_rec < l
-        cont_fact_run = cont_fact_run * cont_incr(n_prev+1,t[l_rec])
-        if δ[end] ==  1
-            disc_fact_run = disc_fact_run*disc_incr(n_prev+1)
-        end
-        for i in (l_rec+1):l
-            push!( S, cont_fact_run*cont_incr(n_prev+1,t[i])*disc_fact_run )
-        end
-    end
-    return S
-end
-
-function postmeansurv(t::Array{Float64},model::ModelNTRrep)
-    if t[1] != 0.0
-        t = [0.0;t]
-    end
-    S = [1.0]
-    l = length(t)
-    α = model.α
-    β = model.β
-    κ = model.baseline.κ
-    X =  [0.0;model.data.T]
-    nᵉ = [model.data.nᵉ;0]
-    R₁ = model.data.R₁
-    R₂ = model.data.R₂
-    cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+1.0) ) )
-    disc_incr_rep(k::Int64) = sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+2) ) for l in 0:(nᵉ[k]-1) ] )/sum( [ binomial(nᵉ[k]-1,l) * (-1.0)^(l+1) * log1p( -1/(R₂[k]+α+l+1) ) for l in 0:(nᵉ[k]-1) ] )
-    disc_incr_norep(k::Int64) = log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) )
-    function disc_incr(k::Int64)
-        ( nᵉ[k] == 1 ) ? disc_incr_norep(k) : disc_incr_rep(k)
-    end
-    cont_fact_run = 1.0
-    n_prev = 1
-    disc_fact_run = 1.0
-    l_rec = findlast( t .< X[end] )
-    for i in 2:l_rec
-        X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
-        n_inc = sum(X_inc_ind)
-        if n_inc > 0
-            n_forw = n_prev + n_inc
-            cont_fact_run = cont_fact_run * mapreduce( j -> cont_incr(j),*,(n_prev+1):n_forw,init=1.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_fact_run = disc_fact_run * mapreduce( j -> nᵉ[j] >= 1 ? disc_incr(j) : 1.0,*,(n_prev+1):n_forw,init=1.0) # discrete part factor of decrease running by data observations, no mesh dependence
-            n_prev =  n_forw
-        end
-        push!( S, cont_fact_run*cont_incr(n_prev+1,t[i]) * disc_fact_run )
-    end
-    if l_rec < l
-        cont_fact_run = cont_fact_run * cont_incr(n_prev+1,t[l_rec])
-        if nᵉ[end] >=  1
-            disc_fact_run = disc_fact_run*disc_incr(n_prev+1)
-        end
-        for i in (l_rec+1):l
-            push!( S, cont_fact_run*cont_incr(n_prev+1,t[i])*disc_fact_run )
-        end
+    # last survival observation greater than mesh's end
+    @inbounds while i ≤ m
+        cur = t[i]
+        cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+        S[i] = exp( cont_incr_run + disc_incr_run )
+        i += 1
+        k += 1
     end
     return S
 end
@@ -339,7 +343,7 @@ Function for posterior simulation of weights at fixed locations corresponding to
 * `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRnorep)
+function post_fix_locw_GammaNTR_accrej_norep(i::Int64,model::ModelNTR)
     α = model.α
     R₂ = model.data.R₂
     k = α+R₂[i]
@@ -352,7 +356,7 @@ function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRnorep)
     return Y
 end
 
-function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRrep)
+function post_fix_locw_GammaNTR_accrej_rep(i::Int64,model::ModelNTR)
     nᵉ = model.data.nᵉ
     α = model.α
     R₂ = model.data.R₂
@@ -367,59 +371,119 @@ function post_fix_locw_GammaNTR_accrej(i::Int64,model::ModelNTRrep)
     return Y
 end
 
-"""
-   posterior_sim
-
-Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
-"""
-function posterior_sim(t::Array{Float64},model::ModelNTR)
-    if t[1] != 0.0
-        t = [0.0;t]
-    end
-    Y = [0.0]
-    l = length(t)
+function cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
     α = model.α
     β = model.β
     κ = model.baseline.κ
-    X =  [0.0;model.data.T]
-    δ = [model.data.δ;0]
     R₁ = model.data.R₁
-    # Log-scale for numerical stability
-    cont_incr(k::Int64) = rand(Gamma( β*(κ(X[k]) - κ(X[k-1])), 1/(α+R₁[k])))
-    cont_incr_1(k::Int64,t::Float64) = rand(Gamma( β*(κ(t) - κ(X[k-1])), 1/(α+R₁[k])))
-    cont_incr_2(k::Int64,t::Float64) = rand(Gamma( β*(κ(X[k]) - κ(t)), 1/(α+R₁[k])))
-    cont_incr_3(k::Int64,t1::Float64,t2::Float64) = rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k])))
-    disc_incr(k::Int64) = post_fix_locw_GammaNTR_accrej(k,model)
-    cont_incr_run = 0.0
-    n_prev = 1
-    disc_incr_run = 0.0
-    l_rec = findlast( t .< X[end] )
-    for i in 2:l_rec
-        X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
-        n_inc = sum(X_inc_ind)
-        if n_inc > 0
-            n_forw = n_prev + n_inc
-            cont_incr_run +=  mapreduce( j -> cont_incr(j), +, (n_prev+1):n_forw, init=0.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_incr_run +=  mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 0.0, +, (n_prev+1):n_forw, init=0.0) # discrete part factor of decrease running by data observations, no mesh dependence
-            n_prev =  n_forw
-        end
-        cont_incr_run += cont_incr_1(n_prev+1,t[i])
-        push!( Y, cont_incr_run + disc_incr_run )
-        cont_incr_run += cont_incr_2(n_prev+1,t[i])
-    end
-    if l_rec < l
-        cont_incr_run += cont_incr_1(n_prev+1,t[l_rec])
-        if δ[end] >=  1
-            disc_incr_run += disc_incr(n_prev+1)
-        end
-        for i in (l_rec+1):l
-            cont_incr_run += cont_incr_3(n_prev+1,t[i-1],t[i])
-            push!( Y, cont_incr_run + disc_incr_run )
-        end
-    end
-    return Y
+    return rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k])))
 end
 
+function disc_incr_rep(k::Int64,model::ModelNTR)
+    α = model.α
+    nᵉ = model.data.nᵉ
+    R₂ = model.data.R₂
+    num = 0.0
+    den = 0.0
+    nk = nᵉ[k] - 1
+    R2k = R₂[k]
+    @inbounds for l in 0:nk
+        b = binomial(nk, l) * (-1.0)^(l+1)
+        num += b * log1p(-1/(R2k + α + l + 2))
+        den += b * log1p(-1/(R2k + α + l + 1))
+    end
+    return log(num/den)
+end
+
+function disc_incr_norep(k::Int64,model::ModelNTR) 
+    α = model.α
+    R₂ = model.data.R₂
+    return log( log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) ) )
+end
+
+function disc_incr(k::Int64,model::ModelNTR)
+    nᵉ = model.data.nᵉ
+    return ( nᵉ[k] == 1 ) ? post_fix_locw_GammaNTR_accrej_norep(k,model) : post_fix_locw_GammaNTR_accrej_rep(k,model)
+end
+
+function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
+    nᵉ = model.data.nᵉ
+    τ = model.data.T
+    m = length(t)
+    n = length(τ)
+    S = Vector{eltype(t)}(undef, m)
+    S[1] = 1.0
+    # Logarithmic scale for numerical stability
+    cont_incr_run = 0.0
+    disc_incr_run = 0.0
+    i = 2
+    j = 1
+    prev = 0.0
+    k = 2
+    @inbounds while i ≤ m && j ≤ n
+        if t[i] < τ[j]
+            # no survival observation between mesh
+            cur = t[i]
+            cont_incr_run += cont_incr(j,prev,cur,model)
+            prev = cur
+            S[i] = exp( cont_incr_run + disc_incr_run )
+            i += 1
+        elseif t[i] > τ[j]
+            # survival observation between mesh
+            cur = τ[j]
+            cont_incr_run += cont_incr(j,prev,cur,model)
+            cur = prev
+            if nᵉ[j] >= 1
+                disc_incr_run += disc_incr(j,model)
+            end
+            j += 1
+        else
+            # fringe reptition case
+            cur = τ[j]
+            cont_incr_run += cont_incr(j,prev,cur,model)
+            prev = cur
+            if nᵉ[j] >= 1
+                disc_incr_run += disc_incr(j,model)
+            end
+            S[i] = exp( cont_incr_run + disc_incr_run)
+            i += 1
+            j += 1
+        end
+        k += 1
+    end
+    # last survival observation greater than mesh's end
+    @inbounds while i ≤ m
+        cur = t[i]
+        cont_incr_run += cont_incr(j,prev,cur,model)
+        S[i] = exp( cont_incr_run + disc_incr_run )
+        i += 1
+        k += 1
+    end
+    return S
+end
+
+"""
+   simulate_posterior_survival
+
+Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
+"""
+function simulate_posterior_survival( t::Vector{Float64}, model::ModelNTR)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    return _simulate_posterior_survival(t, model)
+end
+
+function simulate_posterior_survival( l::Int64, t::Vector{Float64}, model::ModelNTR)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    S_mat = zeros(Float64, l, length(t))
+    for i in 1:l
+        S_mat[i,:] = _simulate_posterior_survival( t, model)
+    end
+        return 
+end
 
 """
     loglikNTR
