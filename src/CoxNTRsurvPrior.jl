@@ -16,15 +16,17 @@ struct DataRegreNTRnorep
     δ::Vector{Int64}
     Z::Vector{Vector{Float64}} 
     n::Int64 
+    nᵉ::Vector{Int64}
 end
 
 function DataRegreNTRnorep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
     sp = sortperm( T )
     T = T[ sp ]
     n = length(T)
+    nᵉ = Float64.(δ)
     δ = δ[ sp ]
     Z = Z[ sp ]
-    return DataRegreNTRnorep( T, δ, Z, n)
+    return DataRegreNTRnorep( T, δ, Z, n, nᵉ)
 end
 
 """
@@ -268,7 +270,7 @@ const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
+    s1, s2, s3 = SuffStatsRegreNTR(c,data,g)
     return ModelRegreNTRnorep( c, α, β, baseline, g, data, s1, s2, s3)
 end
 

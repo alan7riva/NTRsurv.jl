@@ -16,6 +16,7 @@ struct DataNTRnorep
     T::Vector{Float64}
     δ::Vector{Int64}
     n::Int64
+    nᵉ::Vector{Int64}
     R₁::Vector{Int64} 
     R₂::Vector{Int64} 
 end
@@ -26,14 +27,13 @@ function DataNTRnorep(T::Vector{Float64}, δ::Vector{Int64})
     T = T[ sp ]
     n = length(T)
     δ = δ[ sp ]
-    e_ind = δ .== 1
-    nᵉ = Float64.(e_ind)
+    nᵉ = Float64.(δ)
     nᶜ = 1.0 .- nᵉ
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return DataNTRnorep( T, δ, n, R₁, R₂)
+    return DataNTRnorep( T, δ, n, nᵉ, R₁, R₂)
 end
 
 """
@@ -57,7 +57,6 @@ struct DataNTRrep
     δ::Vector{Int64}
     n::Int64
     nᵉ::Vector{Int64}
-    nᶜ::Vector{Int64}
     R₁::Array{Int64,1}
     R₂::Array{Int64,1}
 end
@@ -77,7 +76,7 @@ function DataNTRrep(T::Vector{Float64}, δ::Vector{Int64})
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return DataNTRrep( Tu, δ, n, nᵉ, nᶜ, R₁, R₂)
+    return DataNTRrep( Tu, δ, n, nᵉ, R₁, R₂)
 end
 
 """
