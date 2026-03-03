@@ -106,11 +106,11 @@ function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Fl
 end
 
 """
-    cox_f
+    cox_rs
 
 Cox regression risk score.
 """
-cox_f(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
+cox_rs(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
 
 
 """
@@ -122,12 +122,12 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,f::Function)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,g::Function)
     n=data.n
     δ = data.δ
     Z = data.Z
-    hᵉ = [ (δ[i]==1) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of exact bservations
-    hᶜ = [ (δ[i]==0) ? f(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of censored observations
+    hᵉ = [ (δ[i]==1) ? g(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of exact bservations
+    hᶜ = [ (δ[i]==0) ? g(c,Z[i]) : 0.0 for i in 1:n ] # frequencies of censored observations
     Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
@@ -135,23 +135,26 @@ function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRnorep,f::Functio
     return R₁, R₂, hᵉ
 end
 
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,f::Function)
+function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTRrep,g::Function)
     m = data.m
-    Zᵉ = copy(data.Zᵉ)
-    Zᶜ = copy(data.Zᶜ)
-    l = [  isempty(Zᵉ[i]) ? nothing : findmin([ f(c,v) for v in Zᵉ[i] ])[2] for i in 1:m ]
-    ν = [ isnothing(i) ? 0.0 : f(c,Zᵉ[i]) for i in l ]
+    Zᵉ = [deepcopy(v) for v in data.Zᵉ]
+    Zᶜ = [deepcopy(v) for v in data.Zᶜ] 
+    hᵉ = zeros(m)
     for i in 1:m
-        deleteat!( Zᵉ[i], l[i] )
+        if !isempty(Zᵉ[i])
+            tmp = findmin([ g(c,v) for v in Zᵉ[i] ])
+            hᵉ[i] = tmp[1]
+            deleteat!( Zᵉ[i], tmp[2] )
+        end
     end
-    hᵉ = [ sum( [ f(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
-    hᶜ = [ sum( [ f(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
-    Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
+    hᵉ_2 = [ sum( [ g(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:m ] # frequencies of exact bservations
+    hᶜ = [ sum( [ g(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:m ] # frequencies of censored observations
+    Hᵉ = [ cumsum( hᵉ_2[end:-1:1] )[end:-1:1]; 0]
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
-    F = [ [ [ length(v), sum( [ f(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:m ]
-    return R₁, R₂, ν, F
+    F = [ [ [ length(v), sum( [ g(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:m ]
+    return R₁, R₂, hᵉ, F
 end
 
 """
@@ -164,14 +167,14 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,g::Function,data::DataRegreNTRnorep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     n = data.n
     X =  [0.0;data.T]
-    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,f)
+    R₁, R₂, hᵉ = SuffStatsRegreNTR(c,data,g)
     δ = data.δ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
     disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( log( 1.0 + hᵉ[k]/(R₂[k]+α) ) )
@@ -184,17 +187,17 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,f::Fun
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTRrep)
+function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,g::Function,data::DataRegreNTRrep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ
     β = 1.0/log(1.0+1.0/α)
     m = data.m
     X =  [0.0;data.T]
-    R₁, R₂, ν, F = SuffStatsRegreNTR(c,data,f)
+    R₁, R₂, hᵉ, F = SuffStatsRegreNTR(c,data,g)
     nᵉ = data.nᵉ
     cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )    
-    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^v[1] * log1p(  ν[k]/( α + R₂[k] + v[2]) ) for v in F[k] ] ) )
+    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( sum( [ (-1.0)^v[1] * log1p(  hᵉ[k]/( α + R₂[k] + v[2]) ) for v in F[k] ] ) )
     for k in 1:m
         l += cont_incr(k)
         if nᵉ[k] > 0
@@ -205,7 +208,7 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::
 end
 
 function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTR)
-    return loglikRegreNTR(c,α,baseline,cox_f,data)
+    return loglikRegreNTR(c,α,baseline,cox_rs,data)
 end
 
 """
@@ -227,7 +230,7 @@ struct ModelRegreNTRnorep
     α::Float64 
     β::Float64
     baseline::BaselineNTR
-    f::Function
+    g::Function
     data::DataRegreNTRnorep 
     R₁::Vector{Float64}
     R₂::Vector{Float64}
@@ -239,11 +242,11 @@ struct ModelRegreNTRrep
     α::Float64
     β::Float64
     baseline::BaselineNTR
-    f::Function
+    g::Function
     data::DataRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
-    ν::Vector{Float64}
+    hᵉ::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
 end
 
@@ -263,24 +266,69 @@ If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 """
 const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRnorep)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
     s1, s2, s3 = SuffStatsRegreNTR(c,data,f)
-    return ModelRegreNTRnorep( c, α, β, baseline, f, data, s1, s2, s3)
+    return ModelRegreNTRnorep( c, α, β, baseline, g, data, s1, s2, s3)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,f::Function,data::DataRegreNTRrep)
+function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRrep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3, s4 = SuffStatsRegreNTR(c,data,f)
-    return ModelRegreNTRrep( c, α, β, baseline, f, s1, s2, s3, s4)
+    s1, s2, s3, s4 = SuffStatsRegreNTR(c,data,g)
+    return ModelRegreNTRrep( c, α, β, baseline, g, data, s1, s2, s3, s4)
 end
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTR)
-    return ModelRegreNTR( c, α, baseline, cox_f, data)
+    return ModelRegreNTR( c, α, baseline, cox_rs, data)
+end
+
+function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float64},model::ModelRegreNTR)
+    α = model.α
+    β = model.β
+    c = model.c
+    ν = model.g(model.c,z_new) 
+    κ = model.baseline.κ
+    R₁ = model.R₁
+    return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+ν) )
+end
+
+function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR)
+    α = model.α
+    c = model.c
+    ν = model.g(model.c,z_new)
+    hᵉ = model.hᵉ
+    F = model.F
+    nᵉ = model.data.nᵉ
+    R₂ = model.R₂
+    num = 0.0
+    den = 0.0
+    hk = hᵉ[k]
+    Fk = F[k]
+    R2k = R₂[k]
+    @inbounds for v in Fk
+        num += (-1.0)^(v[1]+1) * log( ( α + R2k + ν + hk + v[2])/( α + R2k + ν + v[2]  ) )
+        den += (-1.0)^(v[1]+1) * log( ( α + R2k + hk + v[2])/( α + R2k + v[2] ) )
+    end
+    return log(num/den)
+end
+
+function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR) 
+    α = model.α
+    c = model.c
+    ν = model.g(model.c,z_new)
+    hᵉ = model.hᵉ
+    R₂ = model.R₂
+    return log( log( (R₂[k]+α+ν+hᵉ[k])/(R₂[k]+α+ν) )/log( (R₂[k]+α+hᵉ[k])/(R₂[k]+α) ) )
+end
+
+function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR)
+    nᵉ = model.data.nᵉ
+    ν = model.g(model.c,z_new) 
+    return ( nᵉ[k] == 1 ) ? postmean_disc_incr_norep(k,z_new,model) : postmean_disc_incr_rep(k,z_new,model)
 end
 
 """
-    postmeansurv
+    mean_posterior_survival
 
 Function for posterior mean survival curve evaluation over a grid
 
@@ -290,95 +338,61 @@ Function for posterior mean survival curve evaluation over a grid
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 * `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
-function postmeansurv(t::Vector{Float64},z_new::Vector{Float64},model::ModelRegreNTRnorep)
+function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::ModelRegreNTR)
     if t[1] != 0.0
         t = [0.0;t]
     end
-    S = [1.0]
-    l = length(t)
-    κ = model.baseline.κ
-    c = model.c
-    α = model.α
-    ν = model.f(model.c,z_new) 
-    β = model.β
-    n = model.data.n
-    X =  [0.0;model.data.T]
-    δ = model.data.δ
-    hᵉ = model.hᵉ
-    R₁ = model.R₁
-    R₂ = model.R₂
-    cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+ν) ) )
-    cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+ν) ) )
-    disc_incr(k::Int64) = log( (R₂[k]+α+ν+hᵉ[k])/(R₂[k]+α+ν) )/log( (R₂[k]+α+hᵉ[k])/(R₂[k]+α) )
-    cont_fact_run = 1.0
-    n_prev = 1
-    disc_fact_run = 1.0
-    l_rec = findlast( t .< X[end] )
-    for i in 2:l_rec
-        X_inc_ind =  t[i-1] .<= X[n_prev+1:end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
-        n_inc = sum(X_inc_ind)
-        if n_inc > 0
-            n_forw = n_prev + n_inc
-            cont_fact_run = cont_fact_run * mapreduce( j -> cont_incr(j),*,(n_prev+1):n_forw,init=1.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_fact_run = disc_fact_run * mapreduce( j -> δ[j] == 1 ? disc_incr(j) : 1.0,*,(n_prev+1):n_forw,init=1.0) # discrete part factor of decrease running by data observations, no mesh dependence
-            n_prev =  n_forw
+    nᵉ = model.data.nᵉ
+    τ = model.data.T
+    m = length(t)
+    n = length(τ)
+    S = Vector{eltype(t)}(undef, m)
+    S[1] = 1.0
+    # Logarithmic scale for numerical stability
+    cont_incr_run = 0.0
+    disc_incr_run = 0.0
+    i = 2
+    j = 1
+    prev = 0.0
+    k = 2
+    @inbounds while i ≤ m && j ≤ n
+        if t[i] < τ[j]
+            # no survival observation between mesh
+            cur = t[i]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,z_new,model)
+            prev = cur
+            S[i] = exp( cont_incr_run + disc_incr_run )
+            i += 1
+        elseif t[i] > τ[j]
+            # survival observation between mesh
+            cur = τ[j]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,z_new,model)
+            cur = prev
+            if nᵉ[j] >= 1
+                disc_incr_run += postmean_disc_incr(j,z_new,model)
+            end
+            j += 1
+        else
+            # fringe reptition case
+            cur = τ[j]
+            cont_incr_run += postmean_cont_incr(j,prev,cur,z_new,model)
+            prev = cur
+            if nᵉ[j] >= 1
+                disc_incr_run += postmean_disc_incr(j,z_new,model)
+            end
+            S[i] = exp( cont_incr_run + disc_incr_run)
+            i += 1
+            j += 1
         end
-        push!( S, cont_fact_run*cont_incr(n_prev+1,t[i]) * disc_fact_run )
+        k += 1
     end
-    if l_rec < l
-        cont_fact_run = cont_fact_run * cont_incr(n_prev+1,t[l_rec])
-        if δ[end] ==  1
-            disc_fact_run = disc_fact_run*disc_incr(n_prev+1)
-        end
-        for i in (l_rec+1):l
-            push!( S, cont_fact_run*cont_incr(n_prev+1,t[i])*disc_fact_run )
-        end
-    end
-    return S
-end
-
-function postmeansurv(t::Vector{Float64},x_new::Vector{Float64},model::ModelRegreNTRrep)
-    if t[1] != 0.0
-        t = [0.0;t]
-    end
-    S = [1.0]
-    l = length(t)
-    κ = model.baseline.κ
-    c = model.c
-    α = model.α
-    ν = model.f(c,x_new) 
-    β = model.β
-    X =  [0.0;model.data.T]
-    nᵉ = [model.data.nᵉ;0]
-    R₁ = model.R₁
-    R₂ = model.R₂
-    F = model.F
-    cont_incr(k::Int64) = exp( β*( κ(X[k])-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+ν) ) )
-    cont_incr(k::Int64,t::Float64) = exp( β*( κ(t)-κ(X[k-1]) )*log( (α+R₁[k])/(α+R₁[k]+ν) ) )
-    disc_incr(k::Int64) = sum( [ (-1.0)^(v[1]+1) * log( (R₂[k] + α + ν + v[2])/α ) for v in F[k] ] )/sum( [ (-1.0)^(v[1]+1) * log( (R₂[k] + α + v[2])/α ) for v in F[k] ] )
-    cont_fact_run = 1.0
-    n_prev = 1
-    disc_fact_run = 1.0
-    l_rec = findlast( t .< X[end] )
-    for i in 2:l_rec
-        X_inc_ind = t[i-1] .<= X[(n_prev+1):end] .< t[i] # indexes of observations which decrease survival between t[i-1] and t[i]
-        n_inc = sum(X_inc_ind)
-        if n_inc > 0
-            n_forw = n_prev + n_inc
-            cont_fact_run = cont_fact_run * mapreduce( j -> cont_incr(j),*,(n_prev+1):n_forw,init=1.0) # continuous part factor of decrease running by data observations, no mesh dependence
-            disc_fact_run = disc_fact_run * mapreduce( j -> nᵉ[j] >= 1 ? disc_incr(j) : 1.0,*,(n_prev+1):n_forw,init=1.0) # discrete part factor of decrease running by data observations, no mesh dependence
-            n_prev =  n_forw
-        end
-        push!( S, cont_fact_run*cont_incr(n_prev+1,t[i]) * disc_fact_run )
-    end
-    if l_rec < l
-        cont_fact_run = cont_fact_run * cont_incr(n_prev+1,t[l_rec])
-        if nᵉ[end] >=  1
-            disc_fact_run = disc_fact_run*disc_incr(n_prev+1)
-        end
-        for i in (l_rec+1):l
-            push!( S, cont_fact_run*cont_incr(n_prev+1,t[i])*disc_fact_run )
-        end
+    # last survival observation greater than mesh's end
+    @inbounds while i ≤ m
+        cur = t[i]
+        cont_incr_run += postmean_cont_incr(j,prev,cur,z_new,model)
+        S[i] = exp( cont_incr_run + disc_incr_run )
+        i += 1
+        k += 1
     end
     return S
 end
@@ -502,7 +516,7 @@ function posterior_sim(t::Vector{Float64},z_new::Vector{Float64},model::ModelReg
     l = length(t)
     α = model.α
     β = model.β
-    ν = model.f(model.c,z_new) 
+    ν = model.g(model.c,z_new) 
     κ = model.baseline.κ
     X =  [0.0;model.data.T]
     δ = [model.data.δ;0]
