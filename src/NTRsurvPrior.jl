@@ -486,6 +486,21 @@ function simulate_posterior_survival( l::Int64, t::Vector{Float64}, model::Model
     return S_mat
 end
 
+struct SuffStatsBaselineNTR
+    κincs::Vector{Float64}
+    dκvec::Vector{Float64}
+end
+
+function SuffStatsBaselineNTR(baseline::BaselineNTR,data::DataNTR)
+    κ = baseline.κ
+    dκ = baseline.dκ
+    n = baseline.n
+    X =  [0.0;data.T]
+    κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
+    dκvec = dκ.(data.T)
+    return SuffStatsBaselineNTR(κincs,dκvec)
+end
+
 """
     loglikNTR
 
@@ -499,7 +514,7 @@ function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
     if dκ == zero
         @error "ERROR: κ derivative not provided in baseline."
     end
-    β = 1.0/log(1.0+1.0/α₀)
+    β = 1.0/log(1.0+1.0/α)
     n = data.n
     X =  [0.0;data.T]
     R₁ = data.R₁
