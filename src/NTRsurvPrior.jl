@@ -1,5 +1,5 @@
 """
-    DataNTRnorep
+    SurvivalDataNoRep
 
 An immutable type containing possibly censored to the right observations and 
 associated sufficient statistics for NTR model fitting when there are no repetitions 
@@ -12,7 +12,7 @@ The type has the following fields:
 - `R₁::Vector{Int64}`: Number of at risk observations after and including \$T_{(j)}\$.
 - `R₂::Vector{Int64}`: Number of at risk observations after \$T_{(j)}\$.
 """
-struct DataNTRnorep
+struct SurvivalDataNoRep
     T::Vector{Float64}
     δ::Vector{Int64}
     n::Int64
@@ -22,7 +22,7 @@ struct DataNTRnorep
 end
 
 
-function DataNTRnorep(T::Vector{Float64}, δ::Vector{Int64})
+function SurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64})
     sp = sortperm( T )
     T = T[ sp ]
     n = length(T)
@@ -33,11 +33,11 @@ function DataNTRnorep(T::Vector{Float64}, δ::Vector{Int64})
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return DataNTRnorep( T, δ, n, nᵉ, R₁, R₂)
+    return SurvivalDataNoRep( T, δ, n, nᵉ, R₁, R₂)
 end
 
 """
-    DataNTRrep
+    SurvivalDataRep
 
 An immutable type containing possibly censored to the right observations and 
 associated sufficient statistics for NTR model fitting when there are repetitions 
@@ -52,16 +52,18 @@ The type has the following fields:
 - `R₁`: Number of at risk observations after and including \$T_{(j)}\$.
 - `R₂`: Number of at risk observations after \$T_{(j)}\$.
 """
-struct DataNTRrep
+struct SurvivalDataRep
     T::Vector{Float64}
     δ::Vector{Int64}
+    m::Int64
     n::Int64
     nᵉ::Vector{Int64}
     R₁::Array{Int64,1}
     R₂::Array{Int64,1}
 end
 
-function DataNTRrep(T::Vector{Float64}, δ::Vector{Int64})
+function SurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64})
+    m = length(T)
     sp = sortperm( T )
     T = T[ sp ]
     δ = δ[ sp ]
@@ -76,46 +78,46 @@ function DataNTRrep(T::Vector{Float64}, δ::Vector{Int64})
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return DataNTRrep( Tu, δ, n, nᵉ, R₁, R₂)
+    return SurvivalDataRep( Tu, δ, m, n, nᵉ, R₁, R₂)
 end
 
 """
-    DataNTR
+    SurvivalData
 
 Union type representing survival data objects for possibly censored to the right survival data in NTR models.
 
-`DataNTR` is an alias for the union of internal data objects `DataNTRnorep` and `DataNTRrep`, corresponding respectively to datasets without and 
+`SurvivalData` is an alias for the union of internal data objects `SurvivalDataNoRep` and `SurvivalDataRep`, corresponding respectively to datasets without and 
 with repeated event times.
     
-    DataNTR(T::Vector{Float64}, δ::Vector{Int64})
+    SurvivalData(T::Vector{Float64}, δ::Vector{Int64})
 
-Constructor for `DataNTR` with observed event times `T` and censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
+Constructor for `SurvivalData` with observed event times `T` and censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
 `δ[i] = 0` denotes right censoring.
 """
-const DataNTR = Union{DataNTRnorep, DataNTRrep}
+const SurvivalData = Union{SurvivalDataNoRep, SurvivalDataRep}
 
-function DataNTR(T::Vector{Float64}, δ::Vector{Int64})
+function SurvivalData(T::Vector{Float64}, δ::Vector{Int64})
     if minimum(T) < 0.0
         @error "Negative values in T are not supported for the data struct!"
     end
     if unique(T) != T
-        return DataNTRrep(T, δ)
+        return SurvivalDataRep(T, δ)
     else
-        return DataNTRnorep(T, δ)
+        return SurvivalDataNoRep(T, δ)
     end
 end
 
 """
-    BaselineNTR
+    Baseline
 
 Immutable object for baseline specification of NTR prior.
 
-`BaselineNTR` is specified by a cumulative hazard function and, optionally,
+`Baseline` is specified by a cumulative hazard function and, optionally,
 its hazard rate and inverse cumulative hazard.
 
-    BaselineNTR(κ::Function)
-    BaselineNTR(κ::Function, dκ::Function)
-    BaselineNTR(κ::Function, dκ::Function, κinv::Function)
+    Baseline(κ::Function)
+    Baseline(κ::Function, dκ::Function)
+    Baseline(κ::Function, dκ::Function, κinv::Function)
 
 Missing fields are set to zero and must be supplied if required for likelihood evaluation or simulation purposes.
 
@@ -124,35 +126,35 @@ Missing fields are set to zero and must be supplied if required for likelihood e
 - `dκ::Function`: A priori hazard rate. Needed for likelihood evaluations.
 - `κinv::Function`: A priori inverse cumulative hazard. Can be needed for simulation purposes outisde of NTRsurv's workflow.
 """
-struct BaselineNTR
+struct Baseline
     κ::Function 
     dκ::Function
     κinv::Function
 end
 
-function BaselineNTR(κ::Function)
-    return BaselineNTR(κ,zero,zero)
+function Baseline(κ::Function)
+    return Baseline(κ,zero,zero)
 end
 
-function BaselineNTR(κ::Function,dκ::Function)
-    return BaselineNTR(κ,dκ,zero)
+function Baseline(κ::Function,dκ::Function)
+    return Baseline(κ,dκ,zero)
 end
 
 """
     ExponentialBaseline(λ::Float64)
 
-Construct `BaselineNTR` object corresponding to an exponential baseline
+Construct `Baseline` object corresponding to an exponential baseline
 hazard with rate parameter `λ`.
 """
 function ExponentialBaseline(λ::Float64)
     r = λ[1]
-    return BaselineNTR(z->r*z,z->r,z->z/r)
+    return Baseline(z->r*z,z->r,z->z/r)
 end
 
 """
     WeibullBaseline(λ::Float64, k::Float64)
 
-Construct `BaselineNTR` object corresponding to a Weibull baseline
+Construct `Baseline` object corresponding to a Weibull baseline
 hazard with scale parameter `λ` and shape parameter `k`.
 """
 function WeibullBaseline(λ::Float64,k::Float64)
@@ -160,21 +162,29 @@ function WeibullBaseline(λ::Float64,k::Float64)
 end
 
 """
-    EmpBayesBaseline(data::DataNTR,exact::Bool=false)
+    EmpiricalBayesBaseline(data::SurvivalData,exact::Bool=false)
 
-Construct `BaselineNTR` object corresponding to an empirically Bayesian exponential baseline
+Construct `Baseline` object corresponding to an empirically Bayesian exponential baseline
 hazard with rate which either matches the mean of all 
 observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
 """
-function EmpBayesBaseline(data::DataNTR,exact::Bool=true)
+function EmpiricalBayesBaseline(data::SurvivalData,exact::Bool=true)
     if exact
-        return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
+        if isa(data,SurvivalDataNoRep)
+            return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
+        else
+            return ExponentialBaseline(sum( data.nᵉ )/sum( data.nᵉ  .*  data.T))
+        end
     else
-        return ExponentialBaseline(1/mean(data.T))
+        if isa(data,SurvivalDataNoRep)
+            return ExponentialBaseline(1/mean(data.T))
+        else
+            return ExponentialBaseline(sum( data.nᵉ .+ data.nᶜ )/sum( (data.nᵉ .+ data.nᶜ) .* data.T))
+        end
     end
 end
 
-function _simulate_prior_survival( t::Array{Float64}, α::Float64, β::Float64, baseline::BaselineNTR)
+function _sample_prior_survival( t::Array{Float64}, α::Float64, β::Float64, baseline::Baseline)
     κ = baseline.κ
     S = zeros(length(t))
     S[1] = 1.0
@@ -188,77 +198,77 @@ function _simulate_prior_survival( t::Array{Float64}, α::Float64, β::Float64, 
 end
 
 """
-    prior_sim(t::Array{Float64},α::Float64,baseline::BaselineNTR)
+    sample_prior_survival(t::Array{Float64},α::Float64,baseline::Baseline)
 
 Function for prior simulation, over a grid of positive values `t`, of NTR prior with variance modulating parameter `α` and`baseline` object specification.
 Intended for prior elicitation before model setting.` 
 """
-function simulate_prior_survival( t::Array{Float64}, α::Float64, baseline::BaselineNTR)
+function sample_prior_survival( t::Array{Float64}, α::Float64, baseline::Baseline)
     if !iszero(t[1])
         t = [0.0;t]
     end
     β = 1.0/log(1.0+1.0/α)
-    return _simulate_prior_survival( t, α, β, baseline)
+    return _sample_prior_survival( t, α, β, baseline)
 end
 
-function simulate_prior_survival( l::Int64, t::Array{Float64}, α::Float64, baseline::BaselineNTR)
+function sample_prior_survival( l::Int64, t::Array{Float64}, α::Float64, baseline::Baseline)
     if !iszero(t[1])
         t = [0.0;t]
     end
     β = 1.0/log(1.0+1.0/α)
     S_mat = zeros(Float64, l, length(t))
     for i in 1:l
-        S_mat[i,:] = _simulate_prior_survival( t, α, β, baseline)
+        S_mat[i,:] = _sample_prior_survival( t, α, β, baseline)
     end
     return S_mat
 end
 
-struct ModelNTRnorep
+struct NeutralToTheRightModelNoRep
     α::Float64 
     β::Float64 
-    baseline::BaselineNTR
-    data::DataNTRnorep
+    baseline::Baseline
+    data::SurvivalDataNoRep
 end
 
-struct ModelNTRrep
+struct NeutralToTheRightModelRep
     α::Float64 
     β::Float64 
-    baseline::BaselineNTR
-    data::DataNTRrep
+    baseline::Baseline
+    data::SurvivalDataRep
 end
 
 """
-    ModelNTR
+    NeutralToTheRightModel
 
 Union type representing NTR models for possibly censored to the right survival data.
 
-`ModelNTR` is an alias for the union of internal structs `ModelNTRnorep` and `ModelNTRrep`, corresponding respectively to modeling of datasets without and 
+`NeutralToTheRightModel` is an alias for the union of internal structs `NeutralToTheRightModelNoRep` and `NeutralToTheRightModelRep`, corresponding respectively to modeling of datasets without and 
 with repeated event times.
     
-    ModelNTR(α::Float64,baseline::BaselineNTR,data::DataNTR
-    ModelNTR(α::Float64,data::DataNTR)
+    NeutralToTheRightModel(α::Float64,baseline::Baseline,data::SurvivalData
+    NeutralToTheRightModel(α::Float64,data::SurvivalData)
 
 Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
-If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
+If `baseline` is not provided then `EmpiricalBayesBaseline(data::SurvivalData,)` is used.
 """
-const ModelNTR = Union{ModelNTRnorep, ModelNTRrep}
+const NeutralToTheRightModel = Union{NeutralToTheRightModelNoRep, NeutralToTheRightModelRep}
 
-function ModelNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
+function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
     β = 1.0/log(1.0+1.0/α)
-    return ModelNTRnorep( α, β, baseline, data)
+    return NeutralToTheRightModelNoRep( α, β, baseline, data)
 end
 
-function ModelNTR( α::Float64, baseline::BaselineNTR, data::DataNTRrep)
+function NeutralToTheRightModel( α::Float64, baseline::Baseline, data::SurvivalDataRep)
     β = 1.0/log(1.0+1.0/α)
-    return ModelNTRrep( α, β, baseline, data)
+    return NeutralToTheRightModelRep( α, β, baseline, data)
 end
 
-function ModelNTR(α::Float64,data::DataNTR)
-    baseline = EmpBayesBaseline(data)
-    return ModelNTR( α, baseline, data)
+function NeutralToTheRightModel(α::Float64,data::SurvivalData)
+    baseline = EmpiricalBayesBaseline(data)
+    return NeutralToTheRightModel( α, baseline, data)
 end
 
-function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
+function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,model::NeutralToTheRightModel)
     α = model.α
     β = model.β
     κ = model.baseline.κ
@@ -266,7 +276,7 @@ function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
     return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+1.0) )
 end
 
-function postmean_disc_incr_rep(k::Int64,model::ModelNTR)
+function postmean_disc_incr_rep(k::Int64,model::NeutralToTheRightModel)
     α = model.α
     nᵉ = model.data.nᵉ
     R₂ = model.data.R₂
@@ -282,23 +292,23 @@ function postmean_disc_incr_rep(k::Int64,model::ModelNTR)
     return log(num/den)
 end
 
-function postmean_disc_incr_norep(k::Int64,model::ModelNTR) 
+function postmean_disc_incr_norep(k::Int64,model::NeutralToTheRightModel) 
     α = model.α
     R₂ = model.data.R₂
     return log( log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) ) )
 end
 
-function postmean_disc_incr(k::Int64,model::ModelNTR)
+function postmean_disc_incr(k::Int64,model::NeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     return ( nᵉ[k] == 1 ) ? postmean_disc_incr_norep(k,model) : postmean_disc_incr_rep(k,model)
 end
 
 """
-    mean_posterior_survival(t::Array{Float64},model::ModelNTR)
+    mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel)
 
 Function for posterior mean survival curve evaluation in NTR `model` over a grid of positive values `t`.
 """
-function mean_posterior_survival(t::Array{Float64},model::ModelNTR)
+function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel)
     if t[1] != 0.0
         t = [0.0;t]
     end
@@ -363,10 +373,10 @@ end
 Function for posterior simulation of weights at fixed locations corresponding to exact observations. 
 
 * `l`: Number of simulaions from the vector of posterior weights.
-* `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
+* `data`: Data struct for NTR models, either type SurvivalDataNoRep or SurvivalDataRep.
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-function post_fix_locw_GammaNTR_accrej_norep(i::Int64,model::ModelNTR)
+function post_fix_locw_GammaNTR_accrej_norep(i::Int64,model::NeutralToTheRightModel)
     α = model.α
     R₂ = model.data.R₂
     k = α+R₂[i]
@@ -379,7 +389,7 @@ function post_fix_locw_GammaNTR_accrej_norep(i::Int64,model::ModelNTR)
     return Y
 end
 
-function post_fix_locw_GammaNTR_accrej_rep(i::Int64,model::ModelNTR)
+function post_fix_locw_GammaNTR_accrej_rep(i::Int64,model::NeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     α = model.α
     R₂ = model.data.R₂
@@ -394,7 +404,7 @@ function post_fix_locw_GammaNTR_accrej_rep(i::Int64,model::ModelNTR)
     return Y
 end
 
-function cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
+function cont_incr(k::Int64,t1::Float64,t2::Float64,model::NeutralToTheRightModel)
     α = model.α
     β = model.β
     κ = model.baseline.κ
@@ -402,12 +412,12 @@ function cont_incr(k::Int64,t1::Float64,t2::Float64,model::ModelNTR)
     return rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k])))
 end
 
-function disc_incr(k::Int64,model::ModelNTR)
+function disc_incr(k::Int64,model::NeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     return ( nᵉ[k] == 1 ) ? post_fix_locw_GammaNTR_accrej_norep(k,model) : post_fix_locw_GammaNTR_accrej_rep(k,model)
 end
 
-function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
+function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     τ = model.data.T
     m = length(t)
@@ -464,50 +474,35 @@ function _simulate_posterior_survival(t::Array{Float64},model::ModelNTR)
 end
 
 """
-   simulate_posterior_survival
+   sample_posterior_survival
 
 Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
 """
-function simulate_posterior_survival( t::Vector{Float64}, model::ModelNTR)
+function sample_posterior_survival( t::Vector{Float64}, model::NeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
-    return _simulate_posterior_survival(t, model)
+    return _sample_posterior_survival(t, model)
 end
 
-function simulate_posterior_survival( l::Int64, t::Vector{Float64}, model::ModelNTR)
+function sample_posterior_survival( l::Int64, t::Vector{Float64}, model::NeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
     S_mat = zeros(Float64, l, length(t))
     for i in 1:l
-        S_mat[i,:] = _simulate_posterior_survival( t, model)
+        S_mat[i,:] = _sample_posterior_survival( t, model)
     end
     return S_mat
 end
 
-struct SuffStatsBaselineNTR
-    κincs::Vector{Float64}
-    dκvec::Vector{Float64}
-end
-
-function SuffStatsBaselineNTR(baseline::BaselineNTR,data::DataNTR)
-    κ = baseline.κ
-    dκ = baseline.dκ
-    n = baseline.n
-    X =  [0.0;data.T]
-    κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
-    dκvec = dκ.(data.T)
-    return SuffStatsBaselineNTR(κincs,dκvec)
-end
-
 """
-    loglikNTR
+    loglikelihood
 
 Function for log-likelihood evaluation of NTR model with a priori variance modulating parameterof `α` 
 `baseline` object specification, and survival data object `data`.
 """
-function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
+function loglikelihood(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ
@@ -531,7 +526,7 @@ function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRnorep)
     return l
 end
 
-function loglikNTR(α::Float64,baseline::BaselineNTR,data::DataNTRrep)
+function loglikelihood(α::Float64,baseline::Baseline,data::SurvivalDataRep)
     l = 0.0
     κ = baseline.κ
     dκ = baseline.dκ

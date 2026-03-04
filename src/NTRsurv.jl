@@ -6,6 +6,7 @@ using Distributions, ProgressMeter
 import Statistics: median
 import SpecialFunctions: gamma
 import IterTools: subsets
+import Base: Tuple
 ProgressMeter.ijulia_behavior(:append)
 
 
@@ -15,24 +16,23 @@ include("AdaptiveMH.jl")
 include("credible_bands.jl")
 
 export
-    BaselineNTR,
-    DataNTR,
-    DataRegreNTR,
+    Baseline,
+    SurvivalData,
+    RegressionSurvivalData,
     ExponentialBaseline,
-    EmpBayesBaseline,
-    MCMCchainAcc,
-    ModelNTR,
-    ModelRegreNTR,
-    RobMonMHtune,
-    RobMonMHwithinGIBBStune,
-    RandWalkMH,
-    RandWalkMHwithinGibbs,
+    EmpiricalBayesBaseline,
+    NeutralToTheRightModel,
+    CoxNeutralToTheRightModel,
     WeibullBaseline,
-    loglikNTR,
-    loglikRegreNTR,
+    acceptance_rate,
+    loglikelihood,
     mean_posterior_survival,
     prior_credible_band,
     posterior_credible_band,
-    simulate_prior_survival,
-    simulate_posterior_survival
+    random_walk_mh,
+    random_walk_mh_within_gibbs,
+    robbins_monro_mh_tune,
+    robbins_monro_mh_within_gibbs_tune,
+    sample_prior_survival,
+    sample_posterior_survival
 end

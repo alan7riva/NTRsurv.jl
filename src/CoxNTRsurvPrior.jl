@@ -1,5 +1,5 @@
 """
-    DataRegreNTRnorep
+    RegressionSurvivalDataNoRep
 
 An immutable type containing possibly censored to the right observations with covariates and 
 associated sufficient statistics, not depending on the Cox regression coefficients, for NTR Cox 
@@ -11,7 +11,7 @@ The type has the following fields:
 - `Z`: Covariates for sorted observation times `T`.
 - `n`: Number of observations.
 """
-struct DataRegreNTRnorep
+struct RegressionSurvivalDataNoRep
     T::Vector{Float64} 
     δ::Vector{Int64}
     Z::Vector{Vector{Float64}} 
@@ -19,18 +19,18 @@ struct DataRegreNTRnorep
     nᵉ::Vector{Int64}
 end
 
-function DataRegreNTRnorep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+function RegressionSurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
     sp = sortperm( T )
     T = T[ sp ]
     n = length(T)
     nᵉ = Float64.(δ)
     δ = δ[ sp ]
     Z = Z[ sp ]
-    return DataRegreNTRnorep( T, δ, Z, n, nᵉ)
+    return RegressionSurvivalDataNoRep( T, δ, Z, n, nᵉ)
 end
 
 """
-    DataregreNTRrep
+    RegressionSurvivalDataRep
 
 An immutable type containing possibly censored to the right observations with covariates and 
 associated sufficient statistics, not depending on the Cox regression coefficients, for NTR Cox 
@@ -49,7 +49,7 @@ The type has the following fields:
 - `m`: Number of unique observations.
 - `nᵉ`: Frequencies of unique exact observations
 """
-struct DataRegreNTRrep
+struct RegressionSurvivalDataRep
     Tr::Vector{Float64}
     T::Vector{Float64}
     δr::Vector{Int64}
@@ -62,7 +62,7 @@ struct DataRegreNTRrep
     nᵉ::Vector{Int64}
 end
 
-function DataRegreNTRrep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+function RegressionSurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
     m = length(T)
     sp = sortperm( T )
     T = T[ sp ]
@@ -77,44 +77,44 @@ function DataRegreNTRrep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector
     nᵉ = [ length(v) for v in Iᵉ ]
     nᶜ = [ length(v) for v in Iᶜ ]
     δᵉ = 1*( nᵉ .> 0 )
-    return DataRegreNTRrep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, nᵉ)
+    return RegressionSurvivalDataRep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, nᵉ)
 end
 
 """
-    DataRegreNTR
+    RegressionSurvivalData
 
 Union type representing survival data objects for possibly censored to the right survival data with covariates in 
 Cox NTR models.
 
-`DataRegreNTR` is an alias for the union of internal data objects `DataRegreNTRnorep` and `DataRegreNTRrep`, corresponding respectively to datasets without and 
+`RegressionSurvivalData` is an alias for the union of internal data objects `RegressionSurvivalDataNoRep` and `RegressionSurvivalDataRep`, corresponding respectively to datasets without and 
 with repeated event times.
     
-    DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+    RegressionSurvivalData(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
 
 Constructor for `DataNTR` with observed event times `T`, censoring indicators `δ` , where `δ[i] = 1` denotes an exact event and
 `δ[i] = 0` denotes right censoring, and covariates Z.
 """
-const DataRegreNTR = Union{DataRegreNTRnorep, DataRegreNTRrep}
+const RegressionSurvivalData = Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep}
 
-function DataRegreNTR(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
+function RegressionSurvivalData(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
     if minimum(T) < 0.0
         @error "Negative values in T are not supported for the data struct!"
     end
     if unique(T) != T
-        return DataRegreNTRrep(T, δ, Z)
+        return RegressionSurvivalDataRep(T, δ, Z)
     else
-        return DataRegreNTRnorep(T, δ, Z)
+        return RegressionSurvivalDataNoRep(T, δ, Z)
     end
 end
 
-function SuffStatsBaselineNTR(baseline::BaselineNTR,data::DataRegreNTR)
+function BaselineSufficientStatistics(baseline::Baseline,data::RegressionSurvivalData)
     κ = baseline.κ
     dκ = baseline.dκ
     n = data.n
     X =  [0.0;data.T]
     κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
     dκvec = dκ.(data.T)
-    return SuffStatsBaselineNTR(κincs,dκvec)
+    return BaselineSufficientStatistics(κincs,dκvec)
 end
 
 """
@@ -124,13 +124,13 @@ Cox regression risk score.
 """
 cox_rs(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
 
-struct SuffStatsRegreNTRnorep
+struct CoxSufficientStatisticsNoRep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
 end
 
-function SuffStatsRegreNTRnorep(c::Vector{Float64},data::DataRegreNTRnorep,g::Function)
+function CoxSufficientStatisticsNoRep(c::Vector{Float64},data::RegressionSurvivalDataNoRep,g::Function)
     n=data.n
     δ = data.δ
     Z = data.Z
@@ -140,19 +140,19 @@ function SuffStatsRegreNTRnorep(c::Vector{Float64},data::DataRegreNTRnorep,g::Fu
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
-    return SuffStatsRegreNTRnorep(R₁, R₂, hᵉ)
+    return CoxSufficientStatisticsNoRep(R₁, R₂, hᵉ)
 end
 
-Tuple(ss::SuffStatsRegreNTRnorep) = (ss.R₁, ss.R₂, ss.hᵉ)
+Tuple(ss::CoxSufficientStatisticsNoRep) = (ss.R₁, ss.R₂, ss.hᵉ)
 
-struct SuffStatsRegreNTRrep
+struct CoxSufficientStatisticsRep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
 end
 
-function SuffStatsRegreNTRrep(c::Vector{Float64},data::DataRegreNTRrep,g::Function)
+function CoxSufficientStatisticsRep(c::Vector{Float64},data::RegressionSurvivalDataRep,g::Function)
     n = data.n
     Zᵉ = [deepcopy(v) for v in data.Zᵉ]
     Zᶜ = [deepcopy(v) for v in data.Zᶜ] 
@@ -171,44 +171,44 @@ function SuffStatsRegreNTRrep(c::Vector{Float64},data::DataRegreNTRrep,g::Functi
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
     F = [ [ [ length(v), sum( [ g(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:n ]
-    return SuffStatsRegreNTRrep(R₁, R₂, hᵉ, F)
+    return CoxSufficientStatisticsRep(R₁, R₂, hᵉ, F)
 end
 
-Tuple(ss::SuffStatsRegreNTRrep) = (ss.R₁, ss.R₂, ss.hᵉ, ss.F)
+Tuple(ss::CoxSufficientStatisticsRep) = (ss.R₁, ss.R₂, ss.hᵉ, ss.F)
 
 """
-   SuffStatsRegreNTR
+   CoxSufficientStatistics
 
 Function for sufficient statistics in Cox regression NTR model. 
 
 * `c`: Vector of parameters for regression functions.
-* `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
+* `data`: Data struct for Cox regression NTR models, either type RegressionSurvivalDataNoRep or RegressionSurvivalDataRep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-const SuffStatsRegreNTR = Union{SuffStatsRegreNTRnorep, SuffStatsRegreNTRrep}
+const CoxSufficientStatistics = Union{CoxSufficientStatisticsNoRep, CoxSufficientStatisticsRep}
 
-function SuffStatsRegreNTR(c::Vector{Float64},data::DataRegreNTR,g::Function)
-    if isa(data, DataRegreNTRnorep)
-        return SuffStatsRegreNTRnorep(c,data,g)
+function CoxSufficientStatistics(c::Vector{Float64},data::RegressionSurvivalData,g::Function)
+    if isa(data, RegressionSurvivalDataNoRep)
+        return CoxSufficientStatisticsNoRep(c,data,g)
     else
-        return SuffStatsRegreNTRrep(c,data,g)
+        return CoxSufficientStatisticsRep(c,data,g)
     end
 end
 
-function ll_cont_incr(k::Int64,α::Float64,β::Float64,suffstatsb::SuffStatsBaselineNTR,suffstatsr::SuffStatsRegreNTR)
+function ll_cont_incr(k::Int64,α::Float64,β::Float64,suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics)
     κinc = suffstatsb.κincs[k]
     R1k = suffstatsr.R₁[k]
     return β*κinc*log( α/(α + R1k) )
 end
 
-function ll_disc_incr_norep(k::Int64,α::Float64,β::Float64,suffstatsb::SuffStatsBaselineNTR,suffstatsr::SuffStatsRegreNTR)
+function ll_disc_incr_norep(k::Int64,α::Float64,β::Float64,suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics)
     dκk = suffstatsb.dκvec[k]
     hek = suffstatsr.hᵉ[k]
     R2k = suffstatsr.R₂[k]
     return log( dκk ) + log(β) + log( log( 1.0 + hek/(R2k+α) ) )
 end
 
-function ll_disc_incr_rep(k::Int64,α::Float64,β::Float64,suffstatsb::SuffStatsBaselineNTR,suffstatsr::SuffStatsRegreNTR)
+function ll_disc_incr_rep(k::Int64,α::Float64,β::Float64,suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics)
     dκk = suffstatsb[k]
     hek = suffstatsr.hᵉ[k]
     R2k = suffstatsr.R₂[k]
@@ -219,23 +219,23 @@ function ll_disc_incr_rep(k::Int64,α::Float64,β::Float64,suffstatsb::SuffStats
     return  log( dκk ) + log(β) + log( s )
 end
 
-function ll_disc_incr(k::Int64,α::Float64,β::Float64,nᵉ::Vector{Int64},suffstatsb::SuffStatsBaselineNTR,suffstatsr::SuffStatsRegreNTR) 
+function ll_disc_incr(k::Int64,α::Float64,β::Float64,nᵉ::Vector{Int64},suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics) 
     return ( nᵉ[k] == 1 ) ? ll_disc_incr_norep(k,α,β,suffstatsb,suffstatsr) : ll_disc_incr_rep(k,α,β,suffstatsb,suffstatsr)
 end
 
 """
-   loglikRegreNTR
+   loglikelihood
 
 Function for sufficient statistics in Cox regression NTR model. 
 
 * `c`: Vector of parameters for Cox regression functions.
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR baseline survival.
-* `data`: Data struct for Cox regression NTR models, either type DataRegreNTRnorep or DataRegreNTRrep.
+* `data`: Data struct for Cox regression NTR models, either type RegressionSurvivalDataNoRep or RegressionSurvivalDataRep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function loglikRegreNTR(c::Vector{Float64},α::Real,β::Real,suffstatsb::SuffStatsBaselineNTR,g::Function,data::DataRegreNTR)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,g::Function,data::RegressionSurvivalData)
     l = 0.0
-    suffstatsr = SuffStatsRegreNTR(c,data,g)
+    suffstatsr = CoxSufficientStatistics(c,data,g)
     n = data.n
     δ = data.δ
     nᵉ = data.nᵉ
@@ -248,57 +248,43 @@ function loglikRegreNTR(c::Vector{Float64},α::Real,β::Real,suffstatsb::SuffSta
     return l
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,β::Real,baseline::BaselineNTR,g::Function,data::DataRegreNTR)
-    suffstatsb = SuffStatsBaselineNTR(baseline,data)
-    return loglikRegreNTR(c,α,β,suffstatsb,g,data)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,baseline::Baseline,g::Function,data::RegressionSurvivalData)
+    suffstatsb = BaselineSufficientStatistics(baseline,data)
+    return loglikelihood(c,α,β,suffstatsb,g,data)
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,g::Function,data::DataRegreNTR)
+function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,g::Function,data::RegressionSurvivalData)
     β = 1.0/log(1.0+1.0/α)
-    return loglikRegreNTR(c,α,β,baseline,g,data)
+    return loglikelihood(c,α,β,baseline,g,data)
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,baseline::BaselineNTR,data::DataRegreNTR)
-    return loglikRegreNTR(c,α,baseline,cox_rs,data)
+function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,data::RegressionSurvivalData)
+    return loglikelihood(c,α,baseline,cox_rs,data)
 end
 
-function loglikRegreNTR(c::Vector{Float64},α::Real,β::Real,suffstatsb::SuffStatsBaselineNTR,data::DataRegreNTR)
-    return loglikRegreNTR(c,α,β,suffstatsb,cox_rs,data)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,data::RegressionSurvivalData)
+    return loglikelihood(c,α,β,suffstatsb,cox_rs,data)
 end
 
-"""
-    NTRmodelRegre
-
-An immutable type for the NTR model framweork 
-- `data`: Data struct with no repetitions in the obsevrations.
-- `baseline`: Baseline struct for Cox regression NTR models.
-- `c`: Vector of parameters for Cox regression functions.
-- `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
-- `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
-- `R₁`: Sufficient statistic for number of at risk observations after and including T_{(j)} factors.
-- `R₂`: Sufficient statistic for number of at risk observations after T_{(j)} factors.
-- `hᵉ`: Sufficient statistic for exact observation covariate factors.
-"""
-
-struct ModelRegreNTRnorep
+struct CoxNeutralToTheRightModelNoRep
     c::Vector{Float64}
     α::Float64 
     β::Float64
-    baseline::BaselineNTR
+    baseline::Baseline
     g::Function
-    data::DataRegreNTRnorep 
+    data::RegressionSurvivalDataNoRep 
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
 end
 
-struct ModelRegreNTRrep
+struct CoxNeutralToTheRightModelRep
     c::Vector{Float64}
     α::Float64
     β::Float64
-    baseline::BaselineNTR
+    baseline::Baseline
     g::Function
-    data::DataRegreNTRrep
+    data::RegressionSurvivalDataRep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
@@ -306,38 +292,38 @@ struct ModelRegreNTRrep
 end
 
 """
-    ModelRegreNTR
+    CoxNeutralToTheRightModel
 
 Union type representing Cox NTR models for possibly censored to the right survival data with covariates.
 
-`ModelRegreNTR` is an alias for the union of internal structs `ModelRegreNTRnorep` and `ModelRegreNTRrep`, corresponding respectively to modeling of datasets without and 
+`CoxNeutralToTheRightModel` is an alias for the union of internal structs `CoxNeutralToTheRightModelNoRep` and `CoxNeutralToTheRightModelRep`, corresponding respectively to modeling of datasets without and 
 with repeated event times.
     
-    ModelRegreNTR(b::Vector{Float64},α::Float64,baseline::BaselineRegreNTR,data::DataRegreNTR)
-    ModelRegreNTR(α::Float64,data::DataNTR)
+    CoxNeutralToTheRightModel(b::Vector{Float64},α::Float64,baseline::BaselineRegreNTR,data::RegressionSurvivalData)
+    CoxNeutralToTheRightModel(α::Float64,data::DataNTR)
 
 Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
 If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 """
-const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
+const CoxNeutralToTheRightModel = Union{CoxNeutralToTheRightModelNoRep, CoxNeutralToTheRightModelRep}
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRnorep)
+function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataNoRep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = Tuple(SuffStatsRegreNTR(c,data,g))
-    return ModelRegreNTRnorep( c, α, β, baseline, g, data, s1, s2, s3)
+    s1, s2, s3 = Tuple(CoxSufficientStatistics(c,data,g))
+    return CoxNeutralToTheRightModelNoRep( c, α, β, baseline, g, data, s1, s2, s3)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRrep)
+function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3, s4 = Tuple(SuffStatsRegreNTR(c,data,g))
-    return ModelRegreNTRrep( c, α, β, baseline, g, data, s1, s2, s3, s4)
+    s1, s2, s3, s4 = Tuple(CoxSufficientStatistics(c,data,g))
+    return CoxNeutralToTheRightModelRep( c, α, β, baseline, g, data, s1, s2, s3, s4)
 end
 
-function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,data::DataRegreNTR)
-    return ModelRegreNTR( c, α, baseline, cox_rs, data)
+function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    return CoxNeutralToTheRightModel( c, α, baseline, cox_rs, data)
 end
 
-function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float64},model::ModelRegreNTR)
+function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     α = model.α
     β = model.β
     c = model.c
@@ -347,7 +333,7 @@ function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float
     return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+ν) )
 end
 
-function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR)
+function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     α = model.α
     c = model.c
     ν = model.g(model.c,z_new)
@@ -367,7 +353,7 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::ModelRegr
     return log(num/den)
 end
 
-function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR) 
+function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel) 
     α = model.α
     c = model.c
     ν = model.g(model.c,z_new)
@@ -376,7 +362,7 @@ function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::ModelRe
     return log( log( (R₂[k]+α+ν+hᵉ[k])/(R₂[k]+α+ν) )/log( (R₂[k]+α+hᵉ[k])/(R₂[k]+α) ) )
 end
 
-function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::ModelRegreNTR)
+function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     ν = model.g(model.c,z_new) 
     return ( nᵉ[k] == 1 ) ? postmean_disc_incr_norep(k,z_new,model) : postmean_disc_incr_rep(k,z_new,model)
@@ -393,7 +379,7 @@ Function for posterior mean survival curve evaluation over a grid
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 * `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
-function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::ModelRegreNTR)
+function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel)
     if t[1] != 0.0
         t = [0.0;t]
     end
@@ -461,7 +447,7 @@ Function for posterior simulation of weights at fixed locations corresponding to
 - `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
 - `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::ModelRegreNTR)
+function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::CoxNeutralToTheRightModel)
     α = model.α
     R₂ = model.R₂
     hᵉ = model.hᵉ
@@ -476,7 +462,7 @@ function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::ModelRe
     return Y
 end
 
-function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::ModelRegreNTR)
+function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutralToTheRightModel)
     α = model.α
     g = model.baseline.g
     c = model.c
@@ -495,15 +481,15 @@ function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::ModelRegr
     return Y
 end
 
-function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::ModelRegreNTR)
+function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::CoxNeutralToTheRightModel)
     α = model.α
     β = model.β
     κ = model.baseline.κ
-    R₁ = model.data.R₁
+    R₁ = model.R₁
     return rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k]+ν)))
 end
 
-function disc_incr(ν::Float64,k::Int64,model::ModelNTR)
+function disc_incr(ν::Float64,k::Int64,model::CoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     return ( nᵉ[k] == 1 ) ? post_fix_locw_GammaNTR_accrej_norep(ν,k,model) : post_fix_locw_GammaNTR_accrej_rep(ν,k,model)
 end
@@ -516,7 +502,7 @@ Function for simulation of posterior survival curves in a grid of values using t
 * `t`: Time grid where posterior mean survival is evaluated.
 * `model`: Model struct for NTR models.
 """
-function _simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
+function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     τ = model.data.T
     ν = model.g(model.c,z_new) 
@@ -535,26 +521,26 @@ function _simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},m
         if t[i] < τ[j]
             # no survival observation between mesh
             cur = t[i]
-            cont_incr_run += cont_incr(j,prev,cur,model)
+            cont_incr_run += cont_incr(ν,j,prev,cur,model)
             prev = cur
             S[i] = exp( -cont_incr_run - disc_incr_run )
             i += 1
         elseif t[i] > τ[j]
             # survival observation between mesh
             cur = τ[j]
-            cont_incr_run += cont_incr(j,prev,cur,model)
+            cont_incr_run += cont_incr(ν,j,prev,cur,model)
             cur = prev
             if nᵉ[j] >= 1
-                disc_incr_run += disc_incr(j,model)
+                disc_incr_run += disc_incr(ν,j,model)
             end
             j += 1
         else
             # fringe reptition case
             cur = τ[j]
-            cont_incr_run += cont_incr(j,prev,cur,model)
+            cont_incr_run += cont_incr(ν,j,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                disc_incr_run += disc_incr(j,model)
+                disc_incr_run += disc_incr(ν,j,model)
             end
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
@@ -565,7 +551,7 @@ function _simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},m
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
-        cont_incr_run += cont_incr(j,prev,cur,model)
+        cont_incr_run += cont_incr(ν,j,prev,cur,model)
         S[i] = exp( -cont_incr_run - disc_incr_run )
         i += 1
         k += 1
@@ -574,24 +560,24 @@ function _simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},m
 end
 
 """
-   simulate_posterior_survival
+   sample_posterior_survival
 
 Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
 """
-function simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
+function sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
-    return _simulate_posterior_survival(t,z_new,model)
+    return _sample_posterior_survival(t,z_new,model)
 end
 
-function simulate_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
+function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
     S_mat = zeros(Float64, l, length(t))
     for i in 1:l
-        S_mat[i,:] = _simulate_posterior_survival(t,z_new,model)
+        S_mat[i,:] = _sample_posterior_survival(t,z_new,model)
     end
     return S_mat
 end
