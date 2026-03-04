@@ -143,6 +143,8 @@ function SuffStatsRegreNTRnorep(c::Vector{Float64},data::DataRegreNTRnorep,g::Fu
     return SuffStatsRegreNTRnorep(R₁, R₂, hᵉ)
 end
 
+Tuple(ss::SuffStatsRegreNTRnorep) = (ss.R₁, ss.R₂, ss.hᵉ)
+
 struct SuffStatsRegreNTRrep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
@@ -171,6 +173,8 @@ function SuffStatsRegreNTRrep(c::Vector{Float64},data::DataRegreNTRrep,g::Functi
     F = [ [ [ length(v), sum( [ g(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:n ]
     return SuffStatsRegreNTRrep(R₁, R₂, hᵉ, F)
 end
+
+Tuple(ss::SuffStatsRegreNTRrep) = (ss.R₁, ss.R₂, ss.hᵉ, ss.F)
 
 """
    SuffStatsRegreNTR
@@ -319,13 +323,13 @@ const ModelRegreNTR = Union{ModelRegreNTRnorep, ModelRegreNTRrep}
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRnorep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3 = SuffStatsRegreNTR(c,data,g)
+    s1, s2, s3 = Tuple(SuffStatsRegreNTR(c,data,g))
     return ModelRegreNTRnorep( c, α, β, baseline, g, data, s1, s2, s3)
 end
 
 function ModelRegreNTR(c::Vector{Float64},α::Float64,baseline::BaselineNTR,g::Function,data::DataRegreNTRrep)
     β = 1.0/log(1.0+1.0/α)
-    s1, s2, s3, s4 = SuffStatsRegreNTR(c,data,g)
+    s1, s2, s3, s4 = Tuple(SuffStatsRegreNTR(c,data,g))
     return ModelRegreNTRrep( c, α, β, baseline, g, data, s1, s2, s3, s4)
 end
 
@@ -484,7 +488,7 @@ function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::ModelRegr
     logp = sum([ log(f(c,z)) for z in model.data.Zᵉ[i] ])
     Y = rand(Gamma(nI,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > sum([ log(1.0 - exp( -f(c,z)*Y/ν)) for z in model.data.Zᵉ[i] ]) -logp  -nI*( log(Y) -logν )        
+    while logU > sum([ log(1.0 - exp( -g(c,z)*Y/ν)) for z in model.data.Zᵉ[i] ]) -logp  -nI*( log(Y) -logν )        
         Y = rand(Gamma(nI,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -567,4 +571,27 @@ function _simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},m
         k += 1
     end
     return S
+end
+
+"""
+   simulate_posterior_survival
+
+Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
+"""
+function simulate_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    return _simulate_posterior_survival(t,z_new,model)
+end
+
+function simulate_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::ModelRegreNTR)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    S_mat = zeros(Float64, l, length(t))
+    for i in 1:l
+        S_mat[i,:] = _simulate_posterior_survival(t,z_new,model)
+    end
+    return S_mat
 end

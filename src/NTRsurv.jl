@@ -12,7 +12,7 @@ ProgressMeter.ijulia_behavior(:append)
 include("NTRsurvPrior.jl")
 include("CoxNTRsurvPrior.jl")
 include("AdaptiveMH.jl")
-include("utils.jl")
+include("credible_bands.jl")
 
 export
     BaselineNTR,
@@ -28,10 +28,11 @@ export
     RandWalkMH,
     RandWalkMHwithinGibbs,
     WeibullBaseline,
-    credible_band,
     loglikNTR,
     loglikRegreNTR,
     mean_posterior_survival,
+    prior_credible_band,
+    posterior_credible_band,
     simulate_prior_survival,
     simulate_posterior_survival
 end
