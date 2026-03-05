@@ -323,46 +323,46 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
     disc_incr_run = 0.0
     i = 2
     j = 1
+    k = 1
     prev = 0.0
-    k = 2
     @inbounds while i ≤ m && j ≤ n
         if t[i] < τ[j]
             # no survival observation between mesh
             cur = t[i]
-            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+            cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             S[i] = exp( cont_incr_run + disc_incr_run )
             i += 1
         elseif t[i] > τ[j]
             # survival observation between mesh
             cur = τ[j]
-            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
-            cur = prev
+            cont_incr_run += postmean_cont_incr(k,prev,cur,model)
+            prev = cur
             if nᵉ[j] >= 1
-                disc_incr_run += postmean_disc_incr(j,model)
+                disc_incr_run += postmean_disc_incr(k,model)
+                k += 1
             end
             j += 1
         else
             # fringe reptition case
             cur = τ[j]
-            cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+            cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                disc_incr_run += postmean_disc_incr(j,model)
+                disc_incr_run += postmean_disc_incr(k,model)
+                k += 1
             end
             S[i] = exp( cont_incr_run + disc_incr_run)
             i += 1
             j += 1
         end
-        k += 1
     end
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
-        cont_incr_run += postmean_cont_incr(j,prev,cur,model)
+        cont_incr_run += postmean_cont_incr(k,prev,cur,model)
         S[i] = exp( cont_incr_run + disc_incr_run )
         i += 1
-        k += 1
     end
     return S
 end
@@ -429,46 +429,47 @@ function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightMo
     disc_incr_run = 0.0
     i = 2
     j = 1
+    k = 1
     prev = 0.0
-    k = 2
     @inbounds while i ≤ m && j ≤ n
         if t[i] < τ[j]
             # no survival observation between mesh
             cur = t[i]
-            cont_incr_run += cont_incr(j,prev,cur,model)
+            cont_incr_run += cont_incr(k,prev,cur,model)
             prev = cur
-            S[i] = exp( -cont_incr_run - disc_incr_run )
+            S[i] = exp( - cont_incr_run - disc_incr_run )
             i += 1
         elseif t[i] > τ[j]
             # survival observation between mesh
             cur = τ[j]
-            cont_incr_run += cont_incr(j,prev,cur,model)
-            cur = prev
+            cont_incr_run += cont_incr(k,prev,cur,model)
+            prev = cur
             if nᵉ[j] >= 1
-                disc_incr_run += disc_incr(j,model)
+                disc_incr_run += disc_incr(k,model)
+                k += 1
             end
             j += 1
         else
             # fringe reptition case
             cur = τ[j]
-            cont_incr_run += cont_incr(j,prev,cur,model)
+            cont_incr_run += cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                disc_incr_run += disc_incr(j,model)
+                disc_incr_run += disc_incr(k,model)
+                k += 1
             end
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
             j += 1
         end
-        k += 1
     end
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
-        cont_incr_run += cont_incr(j,prev,cur,model)
+        cont_incr_run += cont_incr(k,prev,cur,model)
+        prev = cur
         S[i] = exp( -cont_incr_run - disc_incr_run )
         i += 1
-        k += 1
     end
     return S
 end
