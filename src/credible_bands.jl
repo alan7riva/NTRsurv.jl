@@ -1,4 +1,4 @@
-function prior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, α::Float64, baseline::BaselineNTR, μ::Bool=true)
+function prior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, α::Float64, baseline::Baseline, μ::Bool=true)
     if  !( 0 < p < 1)
         @error "ERROR: p is not between zero and one."
     end
@@ -25,7 +25,7 @@ function prior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, α::Floa
     return band_d, band_m, band_u
 end
 
-function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, model::ModelNTR, μ::Bool=true)
+function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, model::NeutralToTheRightModel, μ::Bool=true)
     if  !( 0 < p < 1)
         @error "ERROR: p is not between zero and one."
     end
@@ -51,7 +51,7 @@ function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, mode
     return band_d, band_m, band_u
 end
 
-function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, model::ModelRegreNTR, μ::Bool=true)
+function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel, μ::Bool=true)
     if  !( 0 < p < 1)
         @error "ERROR: p is not between zero and one."
     end

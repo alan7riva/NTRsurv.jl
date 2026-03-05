@@ -158,7 +158,7 @@ Construct `Baseline` object corresponding to a Weibull baseline
 hazard with scale parameter `λ` and shape parameter `k`.
 """
 function WeibullBaseline(λ::Float64,k::Float64)
-    return BaseLineNTR(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
+    return Baseline(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
 end
 
 """
@@ -494,6 +494,21 @@ function sample_posterior_survival( l::Int64, t::Vector{Float64}, model::Neutral
         S_mat[i,:] = _sample_posterior_survival( t, model)
     end
     return S_mat
+end
+
+struct BaselineSufficientStatistics
+    κincs::Vector{Float64}
+    dκvec::Vector{Float64}
+end
+
+function SuffStatsBaseline(baseline::Baseline,data::SurvivalData)
+    κ = baseline.κ
+    dκ = baseline.dκ
+    n = baseline.n
+    X =  [0.0;data.T]
+    κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
+    dκvec = dκ.(data.T)
+    return SuffStatsBaseline(κincs,dκvec)
 end
 
 """
