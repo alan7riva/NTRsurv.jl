@@ -57,8 +57,8 @@ struct RegressionSurvivalDataRep
     Z::Vector{Vector{Float64}}
     Zᵉ::Vector{Vector{Vector{Float64}}}
     Zᶜ::Vector{Vector{Vector{Float64}}}
-    n::Int64
     m::Int64
+    n::Int64
     nᵉ::Vector{Int64}
 end
 
@@ -107,7 +107,7 @@ function RegressionSurvivalData(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector
     end
 end
 
-function BaselineSufficientStatistics(baseline::Baseline,data::RegressionSurvivalData)
+function BaselineSufficientStatistics(baseline::Baseline,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     κ = baseline.κ
     dκ = baseline.dκ
     n = data.n
@@ -209,11 +209,12 @@ function ll_disc_incr_norep(k::Int64,α::Float64,β::Float64,suffstatsb::Baselin
 end
 
 function ll_disc_incr_rep(k::Int64,α::Float64,β::Float64,suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics)
-    dκk = suffstatsb[k]
+    dκk = suffstatsb.dκvec[k]
     hek = suffstatsr.hᵉ[k]
     R2k = suffstatsr.R₂[k]
+    Fk = suffstatsr.F[k]
     s = 0.0
-    for v in F[k]
+    for v in Fk
         s += (-1.0)^v[1] * log1p(  hek/( α + R2k + v[2]) )
     end
     return  log( dκk ) + log(β) + log( s )
@@ -233,7 +234,7 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type RegressionSurvivalDataNoRep or RegressionSurvivalDataRep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,g::Function,data::RegressionSurvivalData)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     l = 0.0
     suffstatsr = CoxSufficientStatistics(c,data,g)
     n = data.n
@@ -248,21 +249,21 @@ function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::Baseline
     return l
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,baseline::Baseline,g::Function,data::RegressionSurvivalData)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     suffstatsb = BaselineSufficientStatistics(baseline,data)
     return loglikelihood(c,α,β,suffstatsb,g,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,g::Function,data::RegressionSurvivalData)
+function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     β = 1.0/log(1.0+1.0/α)
     return loglikelihood(c,α,β,baseline,g,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,data::RegressionSurvivalData)
+function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     return loglikelihood(c,α,baseline,cox_rs,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,data::RegressionSurvivalData)
+function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     return loglikelihood(c,α,β,suffstatsb,cox_rs,data)
 end
 
@@ -410,8 +411,8 @@ function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, mode
             cont_incr_run += postmean_cont_incr(k,prev,cur,z_new,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += postmean_disc_incr(k,z_new,model)
-                k += 1
             end
             j += 1
         else
@@ -420,8 +421,8 @@ function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, mode
             cont_incr_run += postmean_cont_incr(k,prev,cur,z_new,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += postmean_disc_incr(k,z_new,model)
-                k += 1
             end
             S[i] = exp( cont_incr_run + disc_incr_run)
             i += 1
@@ -464,14 +465,14 @@ end
 
 function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutralToTheRightModel)
     α = model.α
-    g = model.baseline.g
+    g = model.g
     c = model.c
     logν = log(ν)
     R₂ = model.R₂
     F = model.F
     k = (α+R₂[i])/ν
     nI = log(length( F[i] ))/log(2)
-    logp = sum([ log(f(c,z)) for z in model.data.Zᵉ[i] ])
+    logp = sum([ log(g(c,z)) for z in model.data.Zᵉ[i] ])
     Y = rand(Gamma(nI,1.0/k))
     logU = log(rand(Uniform()))
     while logU > sum([ log(1.0 - exp( -g(c,z)*Y/ν)) for z in model.data.Zᵉ[i] ]) -logp  -nI*( log(Y) -logν )        
@@ -531,8 +532,8 @@ function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},mod
             cont_incr_run += cont_incr(ν,k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += disc_incr(ν,k,model)
-                k += 1
             end
             j += 1
         else
@@ -541,8 +542,8 @@ function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},mod
             cont_incr_run += cont_incr(ν,k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += disc_incr(ν,k,model)
-                k += 1
             end
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1

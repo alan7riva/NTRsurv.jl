@@ -17,6 +17,7 @@ struct SurvivalDataNoRep
     δ::Vector{Int64}
     n::Int64
     nᵉ::Vector{Int64}
+    e_ind::Vector{Int64}
     R₁::Vector{Int64} 
     R₂::Vector{Int64} 
 end
@@ -29,11 +30,12 @@ function SurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64})
     δ = δ[ sp ]
     nᵉ = Float64.(δ)
     nᶜ = 1.0 .- nᵉ
+    e_ind = findall(δ .== 1)
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataNoRep( T, δ, n, nᵉ, R₁, R₂)
+    return SurvivalDataNoRep( T, δ, n, nᵉ, e_ind, R₁, R₂)
 end
 
 """
@@ -58,6 +60,7 @@ struct SurvivalDataRep
     m::Int64
     n::Int64
     nᵉ::Vector{Int64}
+    e_ind::Vector{Int64}
     R₁::Array{Int64,1}
     R₂::Array{Int64,1}
 end
@@ -74,11 +77,12 @@ function SurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64})
     nᵉ = [ length(v) for v in Iᵉ ]
     nᶜ = [ length(v) for v in Iᶜ ]
     δ = 1*( nᵉ .> 0 )
+    e_ind = findall( nᵉ .> 0 )
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataRep( Tu, δ, m, n, nᵉ, R₁, R₂)
+    return SurvivalDataRep( Tu, δ, m, n, nᵉ, e_ind, R₁, R₂)
 end
 
 """
@@ -253,17 +257,26 @@ If `baseline` is not provided then `EmpiricalBayesBaseline(data::SurvivalData,)`
 """
 const NeutralToTheRightModel = Union{NeutralToTheRightModelNoRep, NeutralToTheRightModelRep}
 
-function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
+#function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
+#    β = 1.0/log(1.0+1.0/α)
+#    return NeutralToTheRightModelNoRep( α, β, baseline, data)
+#end
+
+#function NeutralToTheRightModel( α::Float64, baseline::Baseline, data::SurvivalDataRep)
+#    β = 1.0/log(1.0+1.0/α)
+#    return NeutralToTheRightModelRep( α, β, baseline, data)
+#end
+
+function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::Union{SurvivalDataNoRep,SurvivalDataRep})
     β = 1.0/log(1.0+1.0/α)
-    return NeutralToTheRightModelNoRep( α, β, baseline, data)
+    if isa(data,SurvivalDataNoRep) 
+        return NeutralToTheRightModelNoRep( α, β, baseline, data)
+    else
+        return NeutralToTheRightModelRep( α, β, baseline, data)
+    end
 end
 
-function NeutralToTheRightModel( α::Float64, baseline::Baseline, data::SurvivalDataRep)
-    β = 1.0/log(1.0+1.0/α)
-    return NeutralToTheRightModelRep( α, β, baseline, data)
-end
-
-function NeutralToTheRightModel(α::Float64,data::SurvivalData)
+function NeutralToTheRightModel(α::Float64,data::Union{SurvivalDataNoRep,SurvivalDataRep})
     baseline = EmpiricalBayesBaseline(data)
     return NeutralToTheRightModel( α, baseline, data)
 end
@@ -313,6 +326,7 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
         t = [0.0;t]
     end
     nᵉ = model.data.nᵉ
+    e_ind = model.data.e_ind
     τ = model.data.T
     m = length(t)
     n = length(τ)
@@ -339,8 +353,8 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
             cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += postmean_disc_incr(k,model)
-                k += 1
             end
             j += 1
         else
@@ -349,8 +363,8 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
             cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += postmean_disc_incr(k,model)
-                k += 1
             end
             S[i] = exp( cont_incr_run + disc_incr_run)
             i += 1
@@ -445,8 +459,8 @@ function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightMo
             cont_incr_run += cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += disc_incr(k,model)
-                k += 1
             end
             j += 1
         else
@@ -455,8 +469,8 @@ function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightMo
             cont_incr_run += cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
+                k = j
                 disc_incr_run += disc_incr(k,model)
-                k += 1
             end
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
@@ -502,14 +516,14 @@ struct BaselineSufficientStatistics
     dκvec::Vector{Float64}
 end
 
-function SuffStatsBaseline(baseline::Baseline,data::SurvivalData)
+function BaselineSufficientStatistics(baseline::Baseline,data::SurvivalData)
     κ = baseline.κ
     dκ = baseline.dκ
     n = baseline.n
     X =  [0.0;data.T]
     κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
-    dκvec = dκ.(data.T)
-    return SuffStatsBaseline(κincs,dκvec)
+    dκvec = dκ.(data.T)BaselineSufficientStatistics
+    return BaselineSufficientStatistics(κincs,dκvec)
 end
 
 """

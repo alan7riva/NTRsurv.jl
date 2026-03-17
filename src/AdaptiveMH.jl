@@ -9,6 +9,17 @@
     return s, lfs
 end
 
+@inline function random_walk_mh_step( lf::Function, s::Vector{Float64}, lfs::Float64, prop_σ::Vector{Float64})
+    sprop = s + rand( MultivariateNormal(prop_σ) )
+    lfsprop = lf( sprop )
+    u = rand(Uniform())
+    if log(u) < min( lfsprop - lfs, 0.0)
+        s = sprop
+        lfs = lfsprop
+    end
+    return s, lfs
+end
+
 @inline function random_walk_mh_within_gibbs_step( lf::Function, d::Int64, s::Vector{Float64}, lfs::Float64, prop_σ::Vector{Float64})
     for i in 1:d
         s[i], lfs = random_walk_mh_step( x -> lf( [s[1:(i-1)];x;s[(i+1):d]] ), s[i], lfs, prop_σ[i])
@@ -156,7 +167,7 @@ end
     return c_σ, s_run, lfs_run
 end
 
-@inline function robbins_monro_mh_within_blocked_gibbs_tune_without_progress(n::Int64,b::Int64,lf::Function,s₀::Vector{Float64},σ₀::Vector{Float64},
+@inline function robbins_monro_mh_within_gibbs_tune_without_progress(n::Int64,b::Int64,lf::Function,s₀::Vector{Float64},σ₀::Vector{Float64},
         p_acc::Vector{Float64},γ::Float64)
     d = length(s₀)
     s_run = s₀
