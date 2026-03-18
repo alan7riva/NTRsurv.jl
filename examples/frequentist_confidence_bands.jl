@@ -150,3 +150,76 @@ function σ_estim( z0::Vector{Float64},model::StatsModels.TableRegressionModel{C
     end
     return sqrt.(n.*σ²)
 end
+
+function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t::Vector{Float64},z0::Vector{Float64},model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    β, risk, S0, S1, M, status, T = aux_comps(model)
+    if minimum(t) < T[findfirst(status)]
+        @error "ERROR: Evaluation array 't' starts befor first exact observation in data.."
+    end
+    expβz0 = exp(dot(β,z0))
+    n,p = size(M)
+    l = length(t)
+    Z = model.mf.data.Z
+    if p == 1
+        Z = [ [z] for z in Z]
+    end
+    Ω = omega_estim( risk, S0, S1, M, status)
+    Ωinv = inv(Ω)
+    v = zeros(m)
+    u = zeros(l,n)
+    w = zeros(l)
+    σ² = zeros(l)
+    for k in 1:l
+        h, Zbar_v = cox_hvec_zbar_estim(t[k], z0, β, expβz0, risk, S0, S1, M, status, T)
+        for i in 1:n
+            f_tmp = h' * Ωinv
+            if status[i] == 1
+                u[k,i] += f_tmp*( Z[i] .- Zbar_v[i,:] )
+                if T[i] <= t[k]
+                    s0i_tmp = S0[i]
+                    σ²[k] += ( expβz0 / s0i_tmp)^2 
+                    u[k,i] +=  expβz0 / s0i_tmp
+                end
+            end
+            σ²[k] +=  f_tmp*h
+        end
+    end
+    println("Monte-Carlo quantile computation:")
+    prog = Progress( n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50)
+    for j in 1:m
+        ϵ = rand( Normal(),l,n)
+        v[j] = maximum( [ abs( sum( ϵ[i,:] .* u[i,:])/sqrt( σ²[i] ) ) for i in 1:l] )
+        next!(prog)
+    end
+    return quantile(v,1-α)
+end
+
+
+function Breslow_estimator(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    β = coef(model)
+    δ = Int.(getproperty.(model.mf.data.event, :status))
+    T = getproperty.(model.mf.data.event, :time)
+    sp = sortperm(T)
+    T = T[sp]
+    δ = δ[sp]
+    M = modelmatrix(model)
+    n,p = size(M)
+    η = M * β
+    r = exp.(η)
+    R = cumsum( r[end:-1:1] )[end:-1:1]
+    return cumsum( [ (δ[i]==1) ? 1.0./R[i] : 0.0 for i in 1:n] ), T 
+end
+
+function ep_bands( z0::Vector{Float64}, model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}}, qα::Float64)
+    β = coef(model)
+    H, T = BreslowEstimCoxModel(model)
+    n = length(T)
+    σ = σ_estim( z0, model)
+    S = exp.( -H .* exp( β'*z0 ) )
+    l = (qα/sqrt(n)) .* σ ./ H
+    lower = S.^exp.( l )
+    upper = S.^exp.( -l )
+    lower = clamp.(lower,0,1)
+    upper = clamp.(upper,0,1)
+    return lower[1:end-1], upper[1:end-1], S, T
+end
