@@ -582,3 +582,27 @@ function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Floa
     end
     return S_mat
 end
+
+struct CoxNeutralToTheRightFullyBayesianModel
+    c_vec::Vector{Vector{Float64}}
+    α::Float64 
+    β::Float64
+    baseline::Baseline
+    g::Function
+    data::RegressionSurvivalData
+end
+
+function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    β = 1.0/log(1.0+1.0/α)
+    return CoxNeutralToTheRightModel( c, α, β, baseline, cox_rs, data)
+end
+
+function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
+    S = Vector{eltype(t)}(undef, length(t))
+    m =length(model.c_vec)
+    for c in model.c_vec
+        Cox_model = CoxNeutralToTheRightModel( c, model.α, model.baseline, model.data)
+        S += mean_posterior_survival(t, z_new, Cox_model)./m
+    end
+    return S
+end
