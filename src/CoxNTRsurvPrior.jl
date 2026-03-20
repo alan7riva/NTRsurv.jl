@@ -22,10 +22,10 @@ end
 function RegressionSurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
     sp = sortperm( T )
     T = T[ sp ]
-    n = length(T)
-    nᵉ = Float64.(δ)
     δ = δ[ sp ]
     Z = Z[ sp ]
+    n = length(T)
+    nᵉ = Float64.(δ)
     return RegressionSurvivalDataNoRep( T, δ, Z, n, nᵉ)
 end
 

@@ -1,6 +1,6 @@
 # In this file we include code for computation of fequentist confidence bands,
 # which is used in the `uncertainty_quantification_with_cox_regression`` tutorial.
-using Roots
+using Roots, ProgressMeter
 import LinearAlgebra: dot
 
 # Function for variance estimation of asymptotic band
@@ -47,21 +47,30 @@ function absmaxbrown_quantile(p,K=10)
     return find_zero(f, (0.1,5.0))
 end
 
+# With p = 0.95, absmaxbrown_quantile(p,50) returns 2.2414027273321393
+#qα = 
+
+ep_qα_precomps = [ 2.2414027273321393, 2.4977054744104645 ] 
+
 # Function for equal precission confidence band computation
 
-function ep_bands( km::KaplanMeier{Float64, Float64}, na::NelsonAalen{Float64, Float64}, qα::Float64)
-    T = km_sim.events.time[end]
+function ep_confidence_band( α::Float64, km::KaplanMeier{Float64, Float64}, na::NelsonAalen{Float64, Float64})
+    qα = absmaxbrown_quantile(1-α,50)
+    T = km.events.time[end]
     qαT = sqrt(T)*qα
     n = sum(km.events.nevents)
-    σ = sqrt.( n * u0_estim(km) )
-    survival = km.survival
-    chaz = na.chaz
-    l = (qαT/sqrt(n)) .* σ ./ chaz
+    σ² = n * u0_estim(km)
+    σ = sqrt.( σ² )
+    i_1 = findfirst( (σ² ./ (1 .+ σ²)) .>= 0.005 )
+    i_2 = findlast( (σ² ./ (1 .+ σ²)) .<= 0.995 )
+    survival = km.survival[i_1:i_2]
+    chaz = na.chaz[i_1:i_2]
+    l = (qαT/sqrt(n)) .* σ[i_1:i_2] ./ chaz
     lower = survival.^exp.( l )
     upper = survival.^exp.( -l )
     lower = clamp.(lower,0,1)
     upper = clamp.(upper,0,1)
-    return lower[1:end-1], upper[1:end-1]
+    return lower, survival, upper, km.events.time[i_1:i_2]
 end
 
 # Function for auxilliary computations of quantities needed for confidence bands in
@@ -133,14 +142,15 @@ end
 # Breslow estimator and maximum partial likelihood regression coefficients
 function σ_estim( z0::Vector{Float64},model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     β, risk, S0, S1, M, status, T = aux_comps(model)
+    uT = unique(T[status .== 1])
     expβz0 = exp(dot(β,z0))
     n,p = size(M)
-    l = length(T)
+    l = length(uT)
     Ω = omega_estim( risk, S0, S1, M, status)
     Ωinv = inv(Ω)
     σ² = zeros(l)
     for k in 1:l
-        h, Zbar_v = cox_hvec_zbar_estim(T[k], z0, β, expβz0, risk, S0, S1, M, status, T)
+        h, Zbar_v = cox_hvec_zbar_estim(uT[k], z0, β, expβz0, risk, S0, S1, M, status, T)
         for i in 1:n
             if status[i] == 1 && T[i] <= T[k]
                 σ²[k] += ( expβz0 / S0[i])^2 
@@ -159,10 +169,7 @@ function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t
     expβz0 = exp(dot(β,z0))
     n,p = size(M)
     l = length(t)
-    Z = model.mf.data.Z
-    if p == 1
-        Z = [ [z] for z in Z]
-    end
+    Z = [ collect(r) for r in eachrow(modelmatrix(model))]
     Ω = omega_estim( risk, S0, S1, M, status)
     Ωinv = inv(Ω)
     v = zeros(m)
@@ -184,7 +191,7 @@ function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t
             σ²[k] +=  f_tmp*h
         end
     end
-    println("Monte-Carlo quantile computation:")
+    println("Monte-Carlo quantile computation")
     prog = Progress( n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50)
     for j in 1:m
         ϵ = rand( Normal(),l,n)
@@ -207,12 +214,28 @@ function Breslow_estimator(model::StatsModels.TableRegressionModel{CoxModel{Floa
     η = M * β
     r = exp.(η)
     R = cumsum( r[end:-1:1] )[end:-1:1]
-    return cumsum( [ (δ[i]==1) ? 1.0./R[i] : 0.0 for i in 1:n] ), T 
+    uT = unique(T)
+    H = Float64[]
+    times = Float64[]
+    cumhaz = 0.0
+    for t in uT
+        idx = findall(T .== t)
+        # number of events at time t
+        d = sum(δ[idx])
+        if d > 0
+            # Breslow increment
+            increment = d / R[first(idx)]
+            cumhaz += increment
+            push!(H, cumhaz)
+            push!(times, t)
+        end
+    end
+    return H, times
 end
 
 function ep_bands( z0::Vector{Float64}, model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}}, qα::Float64)
     β = coef(model)
-    H, T = BreslowEstimCoxModel(model)
+    H, T = Breslow_estimator(model)
     n = length(T)
     σ = σ_estim( z0, model)
     S = exp.( -H .* exp( β'*z0 ) )
