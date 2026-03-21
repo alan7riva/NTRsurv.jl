@@ -17,7 +17,6 @@ struct SurvivalDataNoRep
     δ::Vector{Int64}
     n::Int64
     nᵉ::Vector{Int64}
-    e_ind::Vector{Int64}
     R₁::Vector{Int64} 
     R₂::Vector{Int64} 
 end
@@ -30,12 +29,11 @@ function SurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64})
     δ = δ[ sp ]
     nᵉ = Float64.(δ)
     nᶜ = 1.0 .- nᵉ
-    e_ind = findall(δ .== 1)
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataNoRep( T, δ, n, nᵉ, e_ind, R₁, R₂)
+    return SurvivalDataNoRep( T, δ, n, nᵉ, R₁, R₂)
 end
 
 """
@@ -60,7 +58,6 @@ struct SurvivalDataRep
     m::Int64
     n::Int64
     nᵉ::Vector{Int64}
-    e_ind::Vector{Int64}
     R₁::Array{Int64,1}
     R₂::Array{Int64,1}
 end
@@ -77,12 +74,11 @@ function SurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64})
     nᵉ = [ length(v) for v in Iᵉ ]
     nᶜ = [ length(v) for v in Iᶜ ]
     δ = 1*( nᵉ .> 0 )
-    e_ind = findall( nᵉ .> 0 )
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataRep( Tu, δ, m, n, nᵉ, e_ind, R₁, R₂)
+    return SurvivalDataRep( Tu, δ, m, n, nᵉ, R₁, R₂)
 end
 
 """
@@ -326,7 +322,6 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
         t = [0.0;t]
     end
     nᵉ = model.data.nᵉ
-    e_ind = model.data.e_ind
     τ = model.data.T
     m = length(t)
     n = length(τ)

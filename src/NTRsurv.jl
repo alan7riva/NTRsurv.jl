@@ -22,6 +22,7 @@ export
     ExponentialBaseline,
     EmpiricalBayesBaseline,
     NeutralToTheRightModel,
+    CoxNeutralToTheRightFullyBayesianModel,
     CoxNeutralToTheRightModel,
     WeibullBaseline,
     acceptance_rate,

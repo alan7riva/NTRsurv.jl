@@ -576,7 +576,7 @@ function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Floa
     if !iszero(t[1])
         t = [0.0;t]
     end
-    S_mat = zeros(Float64, l, length(t))
+    S_mat =  Matrix{eltype(t)}(undef, l, length(t))
     for i in 1:l
         S_mat[i,:] = _sample_posterior_survival(t,z_new,model)
     end
@@ -592,17 +592,32 @@ struct CoxNeutralToTheRightFullyBayesianModel
     data::RegressionSurvivalData
 end
 
-function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
     β = 1.0/log(1.0+1.0/α)
-    return CoxNeutralToTheRightModel( c, α, β, baseline, cox_rs, data)
+    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, cox_rs, data)
 end
 
 function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
-    S = Vector{eltype(t)}(undef, length(t))
-    m =length(model.c_vec)
-    for c in model.c_vec
-        Cox_model = CoxNeutralToTheRightModel( c, model.α, model.baseline, model.data)
-        S += mean_posterior_survival(t, z_new, Cox_model)./m
+    m = length(model.c_vec)
+    S_mat = Matrix{eltype(t)}(undef, m, length(t))
+    for i in 1:m
+        c_tmp = model.c_vec[i]
+        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.data)
+        S_mat[i,:] = mean_posterior_survival(t, z_new, Cox_model)
     end
-    return S
+    return vec(mean( S_mat, dims=1))
+end
+
+function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    m = length(model.c_vec)
+    S_mat = Matrix{eltype(t)}(undef, m, length(t))
+    for i in 1:m
+        c_tmp = model.c_vec[i]
+        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.data)
+        S_mat[i,:] = _sample_posterior_survival(t,z_new,Cox_model)
+    end
+    return S_mat
 end
