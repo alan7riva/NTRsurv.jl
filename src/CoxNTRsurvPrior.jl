@@ -155,23 +155,23 @@ end
 function CoxSufficientStatisticsRep(c::Vector{Float64},data::RegressionSurvivalDataRep,g::Function)
     n = data.n
     Zᵉ = [deepcopy(v) for v in data.Zᵉ]
-    Zᶜ = [deepcopy(v) for v in data.Zᶜ] 
-    hᵉ = zeros(n)
-    for i in 1:n
-        if !isempty(Zᵉ[i])
-            tmp = findmin([ g(c,v) for v in Zᵉ[i] ])
-            hᵉ[i] = tmp[1]
-            deleteat!( Zᵉ[i], tmp[2] )
-        end
-    end
-    hᵉ_2 = [ sum( [ g(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:n ] # frequencies of exact bservations
+    Zᶜ = [deepcopy(v) for v in data.Zᶜ]
+    hᵉ = [ sum( [ g(c,v) for v in Zᵉ[i] ], init=0.0) for i in 1:n ] # frequencies of exact bservations
     hᶜ = [ sum( [ g(c,v) for v in Zᶜ[i] ], init=0.0) for i in 1:n ] # frequencies of censored observations
-    Hᵉ = [ cumsum( hᵉ_2[end:-1:1] )[end:-1:1]; 0]
+    Hᵉ = [ cumsum( hᵉ[end:-1:1] )[end:-1:1]; 0]
     Hᶜ = [ cumsum( hᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Hᵉ .+ Hᶜ 
     R₂ = Hᶜ .+ [ Hᵉ[2:end]; 0]
+    hᵉ_min = zeros(n)
+    for i in 1:n
+        if !isempty(Zᵉ[i])
+            tmp = findmin([ g(c,v) for v in Zᵉ[i] ])
+            hᵉ_min[i] = tmp[1]
+            deleteat!( Zᵉ[i], tmp[2] )
+        end
+    end
     F = [ [ [ length(v), sum( [ g(c,z) for z in Zᵉ[k][v]], init=0.0)] for v in collect(subsets(1:length(Zᵉ[k]))) ] for k in 1:n ]
-    return CoxSufficientStatisticsRep(R₁, R₂, hᵉ, F)
+    return CoxSufficientStatisticsRep(R₁, R₂, hᵉ_min, F)
 end
 
 Tuple(ss::CoxSufficientStatisticsRep) = (ss.R₁, ss.R₂, ss.hᵉ, ss.F)
@@ -348,8 +348,8 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutra
     Fk = F[k]
     R2k = R₂[k]
     @inbounds for v in Fk
-        num += (-1.0)^(v[1]+1) * log( ( α + R2k + ν + hk + v[2])/( α + R2k + ν + v[2]  ) )
-        den += (-1.0)^(v[1]+1) * log( ( α + R2k + hk + v[2])/( α + R2k + v[2] ) )
+        num += (-1.0)^v[1] * log1p( hk/( α + R2k + ν + v[2]  ) )
+        den += (-1.0)^v[1] * log1p( hk/( α + R2k + v[2] ) )
     end
     return log(num/den)
 end
@@ -360,7 +360,7 @@ function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeut
     ν = model.g(model.c,z_new)
     hᵉ = model.hᵉ
     R₂ = model.R₂
-    return log( log( (R₂[k]+α+ν+hᵉ[k])/(R₂[k]+α+ν) )/log( (R₂[k]+α+hᵉ[k])/(R₂[k]+α) ) )
+    return log( log1p( hᵉ[k]/(R₂[k]+α+ν) )/log1p( hᵉ[k]/(R₂[k]+α) ) )
 end
 
 function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
@@ -469,6 +469,8 @@ function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutra
     c = model.c
     logν = log(ν)
     R₂ = model.R₂
+    # Faltaba !!!
+    hᵉ = model.hᵉ # esto se debe usar creo
     F = model.F
     k = (α+R₂[i])/ν
     nI = log(length( F[i] ))/log(2)
