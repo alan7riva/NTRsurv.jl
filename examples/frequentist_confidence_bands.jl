@@ -114,7 +114,7 @@ function cox_hvec_zbar_estim(t, z0, β, expβz0, risk, S0, S1, M, status, T)
     Zbar_v = zeros(n,p)
     for i in 1:n
         if status[i] == 1 && T[i] <= t
-            Zbar_v[i,:] = S1[i,:] ./ S0[i]
+            Zbar_v[i,:] = S1[i] / S0[i]
             w = (expβz0 / S0[i])
             for j in 1:p
                 h[j] += w * (z0[j] - Zbar_v[i,j])
@@ -132,7 +132,7 @@ function omega_estim( risk, S0, S1, S2, M, status)
     for i in 1:n
         if status[i] == 1
             S0i = S0[i]
-            S1i = S1[i,:]
+            S1i = S1[i]
             S2i = S2[i]
             Ω += (S2i / S0i) - (S1i * S1i') / S0i^2
         end
@@ -144,16 +144,16 @@ end
 # Function for estimation of asymptotic variance, accounting for varaince do to 
 # Breslow estimator and maximum partial likelihood regression coefficients
 function σ_estim( z0::Vector{Float64},model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
-    β, risk, S0, S1, M, status, T = aux_comps(model)
+    β, risk, S0, S1, S2, M, status, T = aux_comps(model)
     uT = unique(T[status .== 1])
     expβz0 = exp(dot(β,z0))
     n,p = size(M)
     l = length(uT)
-    Ω = omega_estim( risk, S0, S1, M, status)
+    Ω = omega_estim( risk, S0, S1, S2, M, status)
     Ωinv = inv(Ω)
     σ² = zeros(l)
     for k in 1:l
-        h, Zbar_v = cox_hvec_zbar_estim(uT[k], z0, β, expβz0, risk, S0, S1, M, status, T)
+        h, _ = cox_hvec_zbar_estim(uT[k], z0, β, expβz0, risk, S0, S1, M, status, T)
         for i in 1:n
             if status[i] == 1 && T[i] <= T[k]
                 σ²[k] += ( expβz0 / S0[i])^2 
@@ -161,20 +161,19 @@ function σ_estim( z0::Vector{Float64},model::StatsModels.TableRegressionModel{C
         end
         σ²[k] +=  h' * Ωinv * h
     end
-    return sqrt.(n.*σ²)
+    return sqrt.( σ²)
 end
 
 function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t::Vector{Float64},z0::Vector{Float64},model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
-    β, risk, S0, S1, M, status, T = aux_comps(model)
-    if minimum(t) > T[ findfirst(status .== 1 ) ]
+    β, risk, S0, S1, S2, M, status, T = aux_comps(model)
+    if minimum(t) < T[ findfirst(status .== 1 ) ]
         @error "ERROR: Evaluation array 't' starts befor first exact observation in data.."
     end
     expβz0 = exp(dot(β,z0))
-    println(size(M))
     n,p = size(M)
     l = length(t)
     Z = [ collect(r) for r in eachrow(modelmatrix(model))]
-    Ω = omega_estim( risk, S0, S1, M, status)
+    Ω = omega_estim( risk, S0, S1, S2, M, status)
     Ωinv = inv(Ω)
     v = zeros(m)
     u = zeros(l,n)
@@ -189,7 +188,7 @@ function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t
                 if T[i] <= t[k]
                     s0i_tmp = S0[i]
                     σ²[k] += ( expβz0 / s0i_tmp)^2 
-                    u[k,i] +=  n*expβz0 / s0i_tmp
+                    u[k,i] +=  expβz0 / s0i_tmp
                 end
             end
             σ²[k] +=  f_tmp*h
@@ -241,7 +240,7 @@ function ep_bands( z0::Vector{Float64}, model::StatsModels.TableRegressionModel{
     β = coef(model)
     H, T = Breslow_estimator(model)
     n = length(T)
-    σ = σ_estim( z0, model)
+    σ =  sqrt(n) .* σ_estim( z0, model)
     S = exp.( -H .* exp( β'*z0 ) )
     l = (qα/sqrt(n)) .* σ ./ H
     lower = S.^exp.( l )
