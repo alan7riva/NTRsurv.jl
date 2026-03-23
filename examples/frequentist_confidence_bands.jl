@@ -155,7 +155,7 @@ function σ_estim( z0::Vector{Float64},model::StatsModels.TableRegressionModel{C
     for k in 1:l
         h, _ = cox_hvec_zbar_estim(uT[k], z0, β, expβz0, risk, S0, S1, M, status, T)
         for i in 1:n
-            if status[i] == 1 && T[i] <= T[k]
+            if status[i] == 1 && T[i] <= uT[k]
                 σ²[k] += ( expβz0 / S0[i])^2 
             end
         end
@@ -197,13 +197,12 @@ function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t
     println("Monte-Carlo quantile computation")
     prog = Progress( n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50)
     for j in 1:m
-        ϵ = rand( Normal(),l,n)
-        v[j] = maximum( [ abs( sum( ϵ[i,:] .* u[i,:])/sqrt( σ²[i] ) ) for i in 1:l] )
+        ϵ = rand( Normal(),n)
+        v[j] = maximum( [ abs( sum( ϵ .* u[k,:])/sqrt( σ²[k] ) ) for k in 1:l] )
         next!(prog)
     end
     return quantile(v,1-α)
 end
-
 
 function Breslow_estimator(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     β = coef(model)
@@ -240,9 +239,9 @@ function ep_bands( z0::Vector{Float64}, model::StatsModels.TableRegressionModel{
     β = coef(model)
     H, T = Breslow_estimator(model)
     n = length(T)
-    σ =  sqrt(n) .* σ_estim( z0, model)
+    σ =   σ_estim( z0, model)
     S = exp.( -H .* exp( β'*z0 ) )
-    l = (qα/sqrt(n)) .* σ ./ H
+    l = qα .* σ ./ H
     lower = S.^exp.( l )
     upper = S.^exp.( -l )
     lower = clamp.(lower,0,1)
@@ -307,4 +306,33 @@ end
 function bootstrap_credible_band( p::Float64, l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
     S_boot =  bootstrap_survival( l, t, z_new, df, z_keys)
     return credible_band( p, S_boot)
+end
+
+function log_partial_likelihood(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    β = coef(model)
+    δ = Int.(getproperty.(model.mf.data.event, :status))
+    T = getproperty.(model.mf.data.event, :time)
+    # sort by time
+    sp = sortperm(T)
+    T = T[sp]
+    δ = δ[sp]
+    M = modelmatrix(model)
+    M = M
+    η = M * β
+    r = exp.(η)
+    # risk set sums (same as your Breslow code)
+    R = cumsum(r[end:-1:1])[end:-1:1]
+    uT = unique(T)
+    loglik = 0.0
+    for t in uT
+        idx = findall(T .== t)
+        d = sum(δ[idx])
+        if d > 0
+            # sum of linear predictors for events at time t
+            event_sum = sum(η[idx] .* δ[idx])
+            # log partial likelihood contribution
+            loglik += event_sum - d * log(R[first(idx)])
+        end
+    end
+    return loglik
 end

@@ -348,8 +348,8 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutra
     Fk = F[k]
     R2k = R₂[k]
     @inbounds for v in Fk
-        num += (-1.0)^v[1] * log1p( hk/( α + R2k + ν + v[2]  ) )
-        den += (-1.0)^v[1] * log1p( hk/( α + R2k + v[2] ) )
+        num += (-1.0)^(v[1]+1) * log1p( -hk/( α + R2k + ν + v[2]  ) )
+        den += (-1.0)^(v[1]+1) * log1p( -hk/( α + R2k + v[2] ) )
     end
     return log(num/den)
 end
