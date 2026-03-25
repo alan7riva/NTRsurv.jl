@@ -5,7 +5,7 @@ function credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
     l,k = size(S)
     m = round( Int, l*p)
     for _ in 1:m
-        b = zeros(Float64, l)
+        b = zeros(Float64, k)
         for i in 1:k
             b[i] = maximum(S[:,i])-minimum(S[:,i])
         end

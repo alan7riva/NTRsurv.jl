@@ -20,10 +20,10 @@ Omitted `type` column.
 ## lung.csv
 
 Description:
-Lung cancer
+The data come from a clinical study of patients with advanced lung cancer conducted by the North Central Cancer Treatment Group. The dataset contains information on 228 patients who were followed after enrollment in the study.
 
 Modifications:
-Changed `time` scale to years by dividing with 365, changed `status` to binary 0-1 variables with 1 denoting an exact observation, dropped covariate columns distinct from `age`, `sex` and `wt_loss`, removed rows with NaN values, changed `age` scale 
+Changed `time` scale to years by dividing with 365, changed `status` to binary 0-1 variables with 1 denoting an exact observation, dropped covariate columns distinct from `age`, `sex` and `wt_loss`, removed rows with NaN values so the dataset consists of 214 observations instead of the original 228, changed `age` scale 
 by dividing with 100, and standardized `wt_loss` by substracting median followed by diving inter-quantile range.
 
 ---
