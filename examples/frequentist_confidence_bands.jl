@@ -183,6 +183,7 @@ function omega_estim( S0, S1, S2, Z, T, status)
             S0i = S0[i]
             S1i = S1[i]
             S2i = S2[i]
+            println(i)
             Ω += (S2i / S0i) - (S1i * S1i') / S0i^2
         end
     end
