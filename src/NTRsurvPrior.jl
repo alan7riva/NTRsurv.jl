@@ -17,6 +17,7 @@ struct SurvivalDataNoRep
     δ::Vector{Int64}
     n::Int64
     nᵉ::Vector{Int64}
+    nᶜ::Vector{Int64}
     R₁::Vector{Int64} 
     R₂::Vector{Int64} 
 end
@@ -33,7 +34,7 @@ function SurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64})
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataNoRep( T, δ, n, nᵉ, R₁, R₂)
+    return SurvivalDataNoRep( T, δ, n, nᵉ, nᶜ, R₁, R₂)
 end
 
 """
@@ -58,6 +59,7 @@ struct SurvivalDataRep
     m::Int64
     n::Int64
     nᵉ::Vector{Int64}
+    nᶜ::Vector{Int64}
     R₁::Array{Int64,1}
     R₂::Array{Int64,1}
 end
@@ -78,7 +80,7 @@ function SurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64})
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
     R₁ = Nᵉ .+ Nᶜ 
     R₂ = Nᶜ .+ [ Nᵉ[2:end]; 0]
-    return SurvivalDataRep( Tu, δ, m, n, nᵉ, R₁, R₂)
+    return SurvivalDataRep( Tu, δ, m, n, nᵉ, nᶜ, R₁, R₂)
 end
 
 """
@@ -146,7 +148,7 @@ end
 Construct `Baseline` object corresponding to an exponential baseline
 hazard with rate parameter `λ`.
 """
-function ExponentialBaseline(λ::Float64)
+function ExponentialBaseline(λ::Float64=1.0)
     r = λ[1]
     return Baseline(z->r*z,z->r,z->z/r)
 end
@@ -168,7 +170,7 @@ Construct `Baseline` object corresponding to an empirically Bayesian exponential
 hazard with rate which either matches the mean of all 
 observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
 """
-function EmpiricalBayesBaseline(data::SurvivalData,exact::Bool=true)
+function EmpiricalBayesBaseline(data::SurvivalData;exact::Bool=true)
     if exact
         if isa(data,SurvivalDataNoRep)
             return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
