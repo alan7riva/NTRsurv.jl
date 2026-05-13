@@ -60,6 +60,7 @@ struct RegressionSurvivalDataRep
     m::Int64
     n::Int64
     nᵉ::Vector{Int64}
+    nᶜ::Vector{Int64}
 end
 
 function RegressionSurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
@@ -77,7 +78,7 @@ function RegressionSurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vec
     nᵉ = [ length(v) for v in Iᵉ ]
     nᶜ = [ length(v) for v in Iᶜ ]
     δᵉ = 1*( nᵉ .> 0 )
-    return RegressionSurvivalDataRep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, nᵉ)
+    return RegressionSurvivalDataRep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, nᵉ, nᶜ)
 end
 
 """
@@ -104,6 +105,14 @@ function RegressionSurvivalData(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector
         return RegressionSurvivalDataRep(T, δ, Z)
     else
         return RegressionSurvivalDataNoRep(T, δ, Z)
+    end
+end
+
+function EmpiricalBayesBaseline(data::RegressionSurvivalData;exact::Bool=true)
+    if isa(data,RegressionSurvivalDataNoRep)
+        return EmpiricalBayesBaseline(SurvivalData(data.T,data.δ);exact=exact)
+    else
+        return EmpiricalBayesBaseline(SurvivalData(data.Tr,data.δr);exact=exact)
     end
 end
 
@@ -348,8 +357,8 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutra
     Fk = F[k]
     R2k = R₂[k]
     @inbounds for v in Fk
-        num += (-1.0)^(v[1]+1) * log1p( -hk/( α + R2k + ν + v[2]  ) )
-        den += (-1.0)^(v[1]+1) * log1p( -hk/( α + R2k + v[2] ) )
+        num += (-1.0)^v[1] * log1p( hk/( α + R2k + ν + v[2]  ) )
+        den += (-1.0)^v[1] * log1p( hk/( α + R2k + v[2] ) )
     end
     return log(num/den)
 end

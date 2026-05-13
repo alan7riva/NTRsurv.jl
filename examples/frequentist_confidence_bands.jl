@@ -108,7 +108,7 @@ end
 
 # Function for auxilliary computations of quantities needed for confidence bands in
 # Cox regression models
-function aux_comps( β::Vector{Float64},T::Vector{Float64},δ::Vector{Int64},Z::Vector{Vector{Float64}})
+function aux_comps2( β::Vector{Float64},T::Vector{Float64},δ::Vector{Int64},Z::Vector{Vector{Float64}})
     m = length(T)
     sp = sortperm( T )
     T = T[ sp ]
