@@ -159,7 +159,7 @@ end
 Construct `Baseline` object corresponding to a Weibull baseline
 hazard with scale parameter `λ` and shape parameter `k`.
 """
-function WeibullBaseline(λ::Float64,k::Float64)
+function WeibullBaseline(k::Float64,λ::Float64)
     return Baseline(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
 end
 
@@ -350,28 +350,29 @@ function mean_posterior_survival(t::Array{Float64},model::NeutralToTheRightModel
             cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += postmean_disc_incr(k,model)
             end
             j += 1
+            k = j
         else
             # fringe reptition case
             cur = τ[j]
             cont_incr_run += postmean_cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += postmean_disc_incr(k,model)
             end
             S[i] = exp( cont_incr_run + disc_incr_run)
             i += 1
             j += 1
+            k = j
         end
     end
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
         cont_incr_run += postmean_cont_incr(k,prev,cur,model)
+        prev = cur
         S[i] = exp( cont_incr_run + disc_incr_run )
         i += 1
     end
@@ -456,10 +457,10 @@ function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightMo
             cont_incr_run += cont_incr(k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += disc_incr(k,model)
             end
             j += 1
+            k = j
         else
             # fringe reptition case
             cur = τ[j]
@@ -472,6 +473,7 @@ function _sample_posterior_survival(t::Array{Float64},model::NeutralToTheRightMo
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
             j += 1
+            k = j
         end
     end
     # last survival observation greater than mesh's end

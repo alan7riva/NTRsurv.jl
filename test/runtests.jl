@@ -13,7 +13,7 @@ using Test, Random, Distributions, Survival, NTRsurv
     @test b isa Baseline
     b = Baseline(κ,dκ,κinv)
     @test b isa Baseline
-    b = WeibullBaseline(λ,k)
+    b = WeibullBaseline(k,λ)
     @test b isa Baseline
     b = ExponentialBaseline(1.0)
     @test b isa Baseline

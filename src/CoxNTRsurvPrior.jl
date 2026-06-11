@@ -131,7 +131,7 @@ end
 
 Cox regression risk score.
 """
-cox_rs(c::Vector{Float64},x::Vector{Float64}) = exp( c' * x)
+cox_rs(c::AbstractVector{<:Real},x::Vector{Float64}) = exp( c' * x)
 
 struct CoxSufficientStatisticsNoRep
     R₁::Vector{Float64}
@@ -139,7 +139,7 @@ struct CoxSufficientStatisticsNoRep
     hᵉ::Vector{Float64}
 end
 
-function CoxSufficientStatisticsNoRep(c::Vector{Float64},data::RegressionSurvivalDataNoRep,g::Function)
+function CoxSufficientStatisticsNoRep(c::AbstractVector{<:Real},data::RegressionSurvivalDataNoRep,g::Function)
     n=data.n
     δ = data.δ
     Z = data.Z
@@ -161,7 +161,7 @@ struct CoxSufficientStatisticsRep
     F::Vector{Vector{Vector{Float64}}}
 end
 
-function CoxSufficientStatisticsRep(c::Vector{Float64},data::RegressionSurvivalDataRep,g::Function)
+function CoxSufficientStatisticsRep(c::AbstractVector{<:Real},data::RegressionSurvivalDataRep,g::Function)
     n = data.n
     Zᵉ = [deepcopy(v) for v in data.Zᵉ]
     Zᶜ = [deepcopy(v) for v in data.Zᶜ]
@@ -196,7 +196,7 @@ Function for sufficient statistics in Cox regression NTR model.
 """
 const CoxSufficientStatistics = Union{CoxSufficientStatisticsNoRep, CoxSufficientStatisticsRep}
 
-function CoxSufficientStatistics(c::Vector{Float64},data::RegressionSurvivalData,g::Function)
+function CoxSufficientStatistics(c::AbstractVector{<:Real},data::RegressionSurvivalData,g::Function)
     if isa(data, RegressionSurvivalDataNoRep)
         return CoxSufficientStatisticsNoRep(c,data,g)
     else
@@ -243,7 +243,7 @@ Function for sufficient statistics in Cox regression NTR model.
 * `data`: Data struct for Cox regression NTR models, either type RegressionSurvivalDataNoRep or RegressionSurvivalDataRep.
 * `baseline`: Baseline struct for Cox regression NTR models.
 """
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
+function loglikelihood(c::AbstractVector{<:Real},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     l = 0.0
     suffstatsr = CoxSufficientStatistics(c,data,g)
     n = data.n
@@ -258,21 +258,21 @@ function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::Baseline
     return l
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
+function loglikelihood(c::AbstractVector{<:Real},α::Real,β::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     suffstatsb = BaselineSufficientStatistics(baseline,data)
     return loglikelihood(c,α,β,suffstatsb,g,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
+function loglikelihood(c::AbstractVector{<:Real},α::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     β = 1.0/log(1.0+1.0/α)
     return loglikelihood(c,α,β,baseline,g,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,baseline::Baseline,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
+function loglikelihood(c::AbstractVector{<:Real},α::Real,baseline::Baseline,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     return loglikelihood(c,α,baseline,cox_rs,data)
 end
 
-function loglikelihood(c::Vector{Float64},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
+function loglikelihood(c::AbstractVector{<:Real},α::Real,β::Real,suffstatsb::BaselineSufficientStatistics,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
     return loglikelihood(c,α,β,suffstatsb,cox_rs,data)
 end
 
@@ -420,28 +420,29 @@ function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, mode
             cont_incr_run += postmean_cont_incr(k,prev,cur,z_new,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += postmean_disc_incr(k,z_new,model)
             end
             j += 1
+            k = j
         else
             # fringe reptition case
             cur = τ[j]
             cont_incr_run += postmean_cont_incr(k,prev,cur,z_new,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += postmean_disc_incr(k,z_new,model)
             end
             S[i] = exp( cont_incr_run + disc_incr_run)
             i += 1
             j += 1
+            k = j
         end
     end
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
         cont_incr_run += postmean_cont_incr(k,prev,cur,z_new,model)
+        prev = cur
         S[i] = exp( cont_incr_run + disc_incr_run )
         i += 1
     end
@@ -498,7 +499,7 @@ function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::CoxNeutra
     β = model.β
     κ = model.baseline.κ
     R₁ = model.R₁
-    return rand(Gamma( β*(κ(t2) - κ(t1)), 1/(α+R₁[k]+ν)))
+    return rand(Gamma( β*(κ(t2) - κ(t1)), ν/(α+R₁[k])))
 end
 
 function disc_incr(ν::Float64,k::Int64,model::CoxNeutralToTheRightModel)
@@ -543,28 +544,29 @@ function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},mod
             cont_incr_run += cont_incr(ν,k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += disc_incr(ν,k,model)
             end
             j += 1
+            k = j
         else
             # fringe reptition case
             cur = τ[j]
             cont_incr_run += cont_incr(ν,k,prev,cur,model)
             prev = cur
             if nᵉ[j] >= 1
-                k = j
                 disc_incr_run += disc_incr(ν,k,model)
             end
             S[i] = exp( - cont_incr_run - disc_incr_run)
             i += 1
             j += 1
+            k = j
         end
     end
     # last survival observation greater than mesh's end
     @inbounds while i ≤ m
         cur = t[i]
         cont_incr_run += cont_incr(ν,k,prev,cur,model)
+        prev = cur
         S[i] = exp( -cont_incr_run - disc_incr_run )
         i += 1
     end
