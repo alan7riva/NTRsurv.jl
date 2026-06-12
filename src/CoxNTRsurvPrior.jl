@@ -214,7 +214,7 @@ function ll_disc_incr_norep(k::Int64,α::Float64,β::Float64,suffstatsb::Baselin
     dκk = suffstatsb.dκvec[k]
     hek = suffstatsr.hᵉ[k]
     R2k = suffstatsr.R₂[k]
-    return log( dκk ) + log(β) + log( log( 1.0 + hek/(R2k+α) ) )
+    return log( dκk ) + log(β) + log( log1p( hek/(R2k+α) ) )
 end
 
 function ll_disc_incr_rep(k::Int64,α::Float64,β::Float64,suffstatsb::BaselineSufficientStatistics,suffstatsr::CoxSufficientStatistics)
@@ -264,7 +264,7 @@ function loglikelihood(c::AbstractVector{<:Real},α::Real,β::Real,baseline::Bas
 end
 
 function loglikelihood(c::AbstractVector{<:Real},α::Real,baseline::Baseline,g::Function,data::Union{RegressionSurvivalDataNoRep, RegressionSurvivalDataRep})
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     return loglikelihood(c,α,β,baseline,g,data)
 end
 
@@ -318,13 +318,13 @@ If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 const CoxNeutralToTheRightModel = Union{CoxNeutralToTheRightModelNoRep, CoxNeutralToTheRightModelRep}
 
 function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataNoRep)
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     s1, s2, s3 = Tuple(CoxSufficientStatistics(c,data,g))
     return CoxNeutralToTheRightModelNoRep( c, α, β, baseline, g, data, s1, s2, s3)
 end
 
 function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep)
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     s1, s2, s3, s4 = Tuple(CoxSufficientStatistics(c,data,g))
     return CoxNeutralToTheRightModelRep( c, α, β, baseline, g, data, s1, s2, s3, s4)
 end
@@ -340,7 +340,7 @@ function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float
     ν = model.g(model.c,z_new) 
     κ = model.baseline.κ
     R₁ = model.R₁
-    return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+ν) )
+    return -β*( κ(t2)-κ(t1) )*log1p( ν/(α+R₁[k]) )
 end
 
 function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
@@ -369,7 +369,9 @@ function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeut
     ν = model.g(model.c,z_new)
     hᵉ = model.hᵉ
     R₂ = model.R₂
-    return log( log1p( hᵉ[k]/(R₂[k]+α+ν) )/log1p( hᵉ[k]/(R₂[k]+α) ) )
+    num = log1p( hᵉ[k]/(R₂[k]+α+ν) )
+    den = log1p( hᵉ[k]/(R₂[k]+α) )
+    return log(num) -log(den)
 end
 
 function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
@@ -466,7 +468,7 @@ function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::CoxNeut
     c = hᵉ[i]/ν
     Y = rand(Gamma(1.0,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > log(1-exp(-c*Y)) - log(c*Y)
+    while logU > log1p(exp(-c*Y)) - log(c*Y)
         Y = rand(Gamma(1.0,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -483,11 +485,11 @@ function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutra
     hᵉ = model.hᵉ # esto se debe usar creo
     F = model.F
     k = (α+R₂[i])/ν
-    nI = log(length( F[i] ))/log(2)
+    nI = log(length( F[i] ))/log(2) + 1
     logp = sum([ log(g(c,z)) for z in model.data.Zᵉ[i] ])
     Y = rand(Gamma(nI,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > sum([ log(1.0 - exp( -g(c,z)*Y/ν)) for z in model.data.Zᵉ[i] ]) -logp  -nI*( log(Y) -logν )        
+    while logU > sum([ log1p( - exp( -g(c,z)*Y/ν)) for z in model.data.Zᵉ[i] ]) -logp  -nI*( log(Y) -logν )        
         Y = rand(Gamma(nI,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -606,7 +608,7 @@ struct CoxNeutralToTheRightFullyBayesianModel
 end
 
 function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, cox_rs, data)
 end
 

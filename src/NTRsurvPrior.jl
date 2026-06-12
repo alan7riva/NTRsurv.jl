@@ -209,7 +209,7 @@ function sample_prior_survival( t::Array{Float64}, α::Float64, baseline::Baseli
     if !iszero(t[1])
         t = [0.0;t]
     end
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0 / log1p(1.0 / α)
     return _sample_prior_survival( t, α, β, baseline)
 end
 
@@ -217,7 +217,7 @@ function sample_prior_survival( l::Int64, t::Array{Float64}, α::Float64, baseli
     if !iszero(t[1])
         t = [0.0;t]
     end
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0 / log1p(1.0 / α)
     S_mat = zeros(Float64, l, length(t))
     for i in 1:l
         S_mat[i,:] = _sample_prior_survival( t, α, β, baseline)
@@ -255,18 +255,8 @@ If `baseline` is not provided then `EmpiricalBayesBaseline(data::SurvivalData,)`
 """
 const NeutralToTheRightModel = Union{NeutralToTheRightModelNoRep, NeutralToTheRightModelRep}
 
-#function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
-#    β = 1.0/log(1.0+1.0/α)
-#    return NeutralToTheRightModelNoRep( α, β, baseline, data)
-#end
-
-#function NeutralToTheRightModel( α::Float64, baseline::Baseline, data::SurvivalDataRep)
-#    β = 1.0/log(1.0+1.0/α)
-#    return NeutralToTheRightModelRep( α, β, baseline, data)
-#end
-
 function NeutralToTheRightModel(α::Float64,baseline::Baseline,data::Union{SurvivalDataNoRep,SurvivalDataRep})
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0 / log1p(1.0 / α)
     if isa(data,SurvivalDataNoRep) 
         return NeutralToTheRightModelNoRep( α, β, baseline, data)
     else
@@ -284,7 +274,7 @@ function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,model::NeutralToThe
     β = model.β
     κ = model.baseline.κ
     R₁ = model.data.R₁
-    return β*( κ(t2)-κ(t1) )*log( (α+R₁[k])/(α+R₁[k]+1.0) )
+    return -β*( κ(t2)-κ(t1) )*log1p(1.0 / (α + R₁[k]))
 end
 
 function postmean_disc_incr_rep(k::Int64,model::NeutralToTheRightModel)
@@ -300,13 +290,15 @@ function postmean_disc_incr_rep(k::Int64,model::NeutralToTheRightModel)
         num += b * log1p(-1/(R2k + α + l + 2))
         den += b * log1p(-1/(R2k + α + l + 1))
     end
-    return log(num/den)
+    return log(num) - log(den)
 end
 
 function postmean_disc_incr_norep(k::Int64,model::NeutralToTheRightModel) 
     α = model.α
     R₂ = model.data.R₂
-    return log( log( (R₂[k]+α+2.0)/(R₂[k]+α+1.0) )/log( (R₂[k]+α+1.0)/(R₂[k]+α) ) )
+    num = log1p(1.0 / (R₂[k] + α + 1.0) )
+    den = log1p(1.0 / (R₂[k] + α) )
+    return log(num) - log(den)
 end
 
 function postmean_disc_incr(k::Int64,model::NeutralToTheRightModel)
@@ -394,7 +386,7 @@ function post_fix_locw_GammaNTR_accrej_norep(i::Int64,model::NeutralToTheRightMo
     k = α+R₂[i]
     Y = rand(Gamma(1.0,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > log(1-exp(-Y)) - log(Y)
+    while logU > log1p(-exp(-Y)) - log(Y)
         Y = rand(Gamma(1.0,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -409,7 +401,7 @@ function post_fix_locw_GammaNTR_accrej_rep(i::Int64,model::NeutralToTheRightMode
     nI = nᵉ[i]
     Y = rand(Gamma(nI,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > nI*( log(1-exp(-Y)) -log(Y) )       
+    while logU > nI*( log1p(-exp(-Y)) -log(Y) )       
         Y = rand(Gamma(nI,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -538,14 +530,14 @@ function loglikelihood(α::Float64,baseline::Baseline,data::SurvivalDataNoRep)
     if dκ == zero
         @error "ERROR: κ derivative not provided in baseline."
     end
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     n = data.n
     X =  [0.0;data.T]
     R₁ = data.R₁
     R₂ = data.R₂
     δ = data.δ
-    cont_incr(k::Int64) = β*( κ(X[k+1])-κ(X[k]) )*log( α/(α + R₁[k]) )
-    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( log( 1.0 + 1.0/(R₂[k]+α) ) ) 
+    cont_incr(k::Int64) = -β*( κ(X[k+1])-κ(X[k]) )*log1p( R₁[k]/α )
+    disc_incr(k::Int64) = log( dκ(X[k+1]) ) + log(β) + log( log1p( 1.0/(R₂[k]+α) ) ) 
     for k in 1:n
         l += cont_incr(k)
         if δ[k] == 1
