@@ -28,6 +28,7 @@ export
     acceptance_rate,
     loglikelihood,
     mean_posterior_survival,
+    credible_band,
     prior_credible_band,
     posterior_credible_band,
     random_walk_mh,

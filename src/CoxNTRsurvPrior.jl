@@ -360,7 +360,7 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutra
         num += (-1.0)^v[1] * log1p( hk/( α + R2k + ν + v[2]  ) )
         den += (-1.0)^v[1] * log1p( hk/( α + R2k + v[2] ) )
     end
-    return log(num/den)
+    return log(num) -log(den)
 end
 
 function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel) 
