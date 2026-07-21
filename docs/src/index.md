@@ -1,17 +1,20 @@
 # NTRsurv.jl documentation
 
 ```@docs
-DataNTR
-BaselineNTR
+Baseline
 ExponentialBaseline
 WeibullBaseline
-EmpBayesBaseline
-prior_sim
-ModelNTR
-postmeansurv
-posterior_sim
-loglikNTR
-DataRegreNTR
-loglikRegreNTR
-ModelRegreNTR
+EmpiricalBayesBaseline
+SurvivalData
+NeutralToTheRightModel
+sample_prior_survival
+sample_posterior_survival
+mean_posterior_survival
+credible_band
+prior_credible_band
+posterior_credible_band
+RegressionSurvivalData
+CoxNeutralToTheRightModel
+CoxNeutralToTheRightFullyBayesianModel
+loglikelihood
 ```

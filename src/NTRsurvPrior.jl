@@ -554,7 +554,7 @@ function loglikelihood(α::Float64,baseline::Baseline,data::SurvivalDataRep)
     if dκ == zero
         @error "ERROR: κ derivative not provided in baseline."
     end
-    β = 1.0/log(1.0+1.0/α)
+    β = 1.0/log1p(1.0/α)
     n = data.n
     nᵉ = [data.nᵉ;0]
     X =  [0.0;data.T]
