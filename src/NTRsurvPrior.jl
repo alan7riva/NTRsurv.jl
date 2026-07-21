@@ -154,10 +154,10 @@ function ExponentialBaseline(λ::Float64=1.0)
 end
 
 """
-    WeibullBaseline(λ::Float64, k::Float64)
+    WeibullBaseline(k::Float64,λ::Float64)
 
 Construct `Baseline` object corresponding to a Weibull baseline
-hazard with scale parameter `λ` and shape parameter `k`.
+hazard with shape parameter `k` and scale parameter `λ`.
 """
 function WeibullBaseline(k::Float64,λ::Float64)
     return Baseline(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
