@@ -28,7 +28,7 @@ function SurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64})
     T = T[ sp ]
     n = length(T)
     δ = δ[ sp ]
-    nᵉ = Float64.(δ)
+    nᵉ = copy(δ)
     nᶜ = 1.0 .- nᵉ
     Nᵉ = [ cumsum( nᵉ[end:-1:1] )[end:-1:1]; 0]
     Nᶜ = [ cumsum( nᶜ[end:-1:1] )[end:-1:1]; 0]
@@ -510,7 +510,7 @@ end
 function BaselineSufficientStatistics(baseline::Baseline,data::SurvivalData)
     κ = baseline.κ
     dκ = baseline.dκ
-    n = baseline.n
+    n = data.n
     X =  [0.0;data.T]
     κincs = [ κ(X[k+1])-κ(X[k]) for k in 1:n]
     dκvec = dκ.(data.T)BaselineSufficientStatistics
@@ -554,9 +554,9 @@ function loglikelihood(α::Float64,baseline::Baseline,data::SurvivalDataRep)
     if dκ == zero
         @error "ERROR: κ derivative not provided in baseline."
     end
-    β = 1.0/log(1.0+1.0/α₀)
+    β = 1.0/log(1.0+1.0/α)
     n = data.n
-    nᵉ = [model.data.nᵉ;0]
+    nᵉ = [data.nᵉ;0]
     X =  [0.0;data.T]
     R₁ = data.R₁
     R₂ = data.R₂

@@ -25,7 +25,7 @@ function RegressionSurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64}, Z::V
     δ = δ[ sp ]
     Z = Z[ sp ]
     n = length(T)
-    nᵉ = Float64.(δ)
+    nᵉ = copy(δ)
     return RegressionSurvivalDataNoRep( T, δ, Z, n, nᵉ)
 end
 
@@ -468,7 +468,7 @@ function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::CoxNeut
     c = hᵉ[i]/ν
     Y = rand(Gamma(1.0,1.0/k))
     logU = log(rand(Uniform()))
-    while logU > log1p(exp(-c*Y)) - log(c*Y)
+    while logU > log1p( -exp(-c*Y) ) - log(c*Y)
         Y = rand(Gamma(1.0,1.0/k))
         logU = log(rand(Uniform()))
     end
@@ -607,17 +607,20 @@ struct CoxNeutralToTheRightFullyBayesianModel
     data::RegressionSurvivalData
 end
 
-function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalData)
     β = 1.0/log1p(1.0/α)
-    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, cox_rs, data)
+    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, g, data)
 end
 
 function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
     m = length(model.c_vec)
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
     S_mat = Matrix{eltype(t)}(undef, m, length(t))
     for i in 1:m
         c_tmp = model.c_vec[i]
-        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.data)
+        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
         S_mat[i,:] = mean_posterior_survival(t, z_new, Cox_model)
     end
     return vec(mean( S_mat, dims=1))
