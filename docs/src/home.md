@@ -40,6 +40,22 @@ julia> T = lung[!,:time]
 julia> δ = lung[!,:status]
 ```
 
+```julia
+using NTRsurv
+using Distributions
+
+T = rand(Weibull(2.5, 0.7), 200)
+δ = ones(Int, length(T))
+
+data = SurvivalData(T, δ)
+baseline = ExponentialBaseline(1.0)
+model = NeutralToTheRightModel(5.0, baseline, data)
+
+t = collect(range(0.0, maximum(T), length = 100))
+
+Smean = mean_posterior_survival(t, model)
+lower, center, upper = posterior_credible_band(0.05, 1000, t, model)
+```
 ## Contents
 
 ```@contents
