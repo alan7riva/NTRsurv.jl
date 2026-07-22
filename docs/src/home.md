@@ -28,7 +28,7 @@ directory and is loaded as a `DataFrame` using the
 [DataFrames](https://github.com/JuliaData/DataFrames.jl) packages.
 
 ```julia-repl
-julia> using NTRsurv, Survival, StatsModels, CSV, DataFrames
+julia> using NTRsurv, Distributions, CSV, DataFrames
 
 julia> lung = CSV.read(joinpath(pkgdir(NTRsurv), "test", "data", "lung.csv"), DataFrame);
 ```

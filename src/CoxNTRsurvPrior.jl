@@ -597,7 +597,15 @@ function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Floa
     end
     return S_mat
 end
+"""
+    CoxNeutralToTheRightFullyBayesianModel
 
+Immutable type for Cox NTR models in a fully Bayesian setting where regression coefficents are treated as random instead of fixed.
+
+Construction for fully Bayesian Cox NTR models is done by providing a sample of regressión coefficients inside the array `c_vec`, 
+a priori variance modulating parameter `α`, `baseline` object specification, Cox regression function `g`, and regressiom survival 
+data object `data`. If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
+"""
 struct CoxNeutralToTheRightFullyBayesianModel
     c_vec::Vector{Vector{Float64}}
     α::Float64 

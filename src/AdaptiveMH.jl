@@ -38,6 +38,14 @@ end
     return s, lfs
 end
 
+"""
+    random_walk_mh( b::Int64, lf::Function, s::Float64, lfs::Float64, prop_σ::Float64)
+
+Function for computation of a one-dimensional random-walk Metropolis-Hastings chain of size `b` with
+target distribution specified by log-density function `lf`, which may be known only up to an additive constant. 
+Starting from the initial value `s` with valuation `lfs` when `lf` is applied. The proposal distribution is Gaussian 
+random walk with standard deviation `prop_σ`.
+"""
 @inline function random_walk_mh( b::Int64, lf::Function, s::Float64, lfs::Float64, prop_σ::Float64)
     chain_s = zeros(b)
     chain_s[1] = s
@@ -50,6 +58,14 @@ end
     return chain_s, lfs_run
 end
 
+"""
+    random_walk_mh_within_gibbs( b::Int64, lf::Function, s::Vector{Float64}, lfs::Float64, prop_σ::Vector{Float64})
+
+Function for computation of a one-dimensional random-walk Metropolis-Hastings chain of size `b` with
+target distribution specified by log-density function `lf`, which may be known only up to an additive constant. 
+Starting from the initial value `s` with valuation `lfs` when `lf` is applied. The proposal distribution is Gaussian 
+random walk with standard deviation `prop_σ`.
+"""
 @inline function random_walk_mh_within_gibbs( b::Int64, lf::Function, s::Vector{Float64}, lfs::Float64, prop_σ::Vector{Float64})
     d = length(s)
     chain_s = [ zeros(d) for _ in 1:b ]
@@ -77,6 +93,11 @@ end
     return chain_s, lfs_run
 end
 
+"""
+    acceptance_rate(v::Vector{Float64})
+
+Function for computation of the acceptance rate of a Markov chain with values store in the array `v`. 
+"""
 function acceptance_rate(v::Vector{Float64})
     l = length(v)
     rej = length( findall( j-> v[j+1] != v[j], collect(1:(l-1)) ) )
@@ -93,13 +114,6 @@ function acceptance_rate(v::Vector{Vector{Float64}})
     return rej/(l-1)
 end
 
-# n <- iteraciones de Robbins-Monro
-# b <- Robbins-Monro batch size, in this case Metropolis-Hastings steps
-# lf <- loglikelihood with constant terms substracted
-# s₀ <- overall initial state for the Metropolis-Hastings algoritm
-# σ₀ <- initial state for Robbins-Monro algorithm pertaining to the standard deviations in Metropolis- Hastings algorithm
-# p_acc <- targeted probability of acceptance in Robbins-Monro algorithm
-# γ <- learning rate of Robbins-Monro algorithm 
 @inline function robbins_monro_mh_tune_with_progress(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
         p_acc::Float64,γ::Float64)
     s_run = s₀
@@ -137,6 +151,15 @@ end
     return c_σ, s_run, lfs_run
 end
 
+"""
+    robbins_monro_mh_tune(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
+        p_acc::Float64,γ::Float64,show_progress::Bool=true)
+
+Function for tuning the variance in the Gaussian proposal of a random walk Metropolis-Hastings algorithm, as implemented
+in `random_walk_mh_within_gibbs(b,lf,s,lfs,prop_σ)`, with the Robbins-Monro algorithm targeting acceptance rate `p_acc`, for `n` iterations
+with learning rate `γ`, initial chain state `s₀` and standard deviation `σ₀`. Default election `show_progress=true` displays 
+a progress meter bar, while `show_progress=false` supresses it.
+"""
 function robbins_monro_mh_tune(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
         p_acc::Float64,γ::Float64,show_progress::Bool=true)
     if show_progress
@@ -185,6 +208,15 @@ end
     return c_σ, s_run, lfs_run
 end
 
+"""
+    robbins_monro_mh_within_gibbs_tune(n::Int64,b::Int64,lf::Function,s₀::Vector{Float64},σ₀::Vector{Float64},
+        p_acc::Vector{Float64},γ::Float64,show_progress::Bool=true)
+
+Function for tuning the variance in the Gaussian proposal of a random walk Metropolis-Hastings within Gibbs algorithm, as 
+implemented in `random_walk_mh(b,lf,s,lfs,prop_σ)`, with the Robbins-Monro algorithm targeting acceptance rate `p_acc`, for 
+`n` iterations with learning rate `γ`, initial chain state `s₀` and standard deviation `σ₀`. Default election `show_progress=true` displays 
+a progress meter bar, while `show_progress=false` supresses it.
+"""
 function robbins_monro_mh_within_gibbs_tune(n::Int64,b::Int64,lf::Function,s₀::Vector{Float64},σ₀::Vector{Float64},
         p_acc::Vector{Float64},γ::Float64,show_progress::Bool=true)
     if show_progress
