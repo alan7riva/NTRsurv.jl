@@ -620,6 +620,11 @@ function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::F
     return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, g, data)
 end
 
+function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    β = 1.0/log1p(1.0/α)
+    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, cox_rs, data)
+end
+
 function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
     m = length(model.c_vec)
     if !iszero(t[1])
