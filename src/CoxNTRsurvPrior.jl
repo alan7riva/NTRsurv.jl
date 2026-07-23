@@ -647,7 +647,7 @@ function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, m
     S_mat = Matrix{eltype(t)}(undef, m, length(t))
     for i in 1:m
         c_tmp = model.c_vec[i]
-        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.data)
+        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
         S_mat[i,:] = _sample_posterior_survival(t,z_new,Cox_model)
     end
     return S_mat
