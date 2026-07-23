@@ -13,7 +13,6 @@ The package is currently available on GitHub and can be installed using Julia’
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/alan7riva/NTRsurv.jl.git")
-using NTRsurv
 ```
 
 ## Getting started
@@ -27,35 +26,66 @@ directory and is loaded as a `DataFrame` using the
 [CSV](https://github.com/JuliaData/CSV.jl) and
 [DataFrames](https://github.com/JuliaData/DataFrames.jl) packages.
 
-```julia-repl
-julia> using NTRsurv, Distributions, CSV, DataFrames
-
-julia> lung = CSV.read(joinpath(pkgdir(NTRsurv), "test", "data", "lung.csv"), DataFrame);
-```
 
 ## Fitting neutral to the right (NTR) model
 
-```julia-repl
-julia> T = lung[!,:time]
-julia> δ = lung[!,:status]
+```@example ntr-fit
+using NTRsurv, Distributions, CSV, DataFrames, Plots
+lung = CSV.read(joinpath(pkgdir(NTRsurv), "test", "data", "lung.csv"), DataFrame);
 ```
+
+### Baseline specification and prior inspection
+
+The baseline cumulative hazard determines the prior mean survival curve. Here we use an empirical Bayes baseline constructed from the data.
+
+```@example ntr-fit
+T = lung[!,:time]
+δ = lung[!,:status]
+data = SurvivalData(T,δ)
+baseline = EmpiricalBayesBaseline(data)
+α = 2.0
+t = collect(range(0.0, maximum(T), length = 100))
+prior_band_d, prior_band_m, prior_band_u = prior_credible_band(0.05, 500, t, α, baseline)
+prior_plot = plot(t,prior_band_m,ribbon = (prior_band_m .- prior_band_d,prior_band_u .- prior_band_m),fillalpha = 0.3,xlabel = "\$t\$",ylabel = "\$S_0(t)\$", label = "Prior mean baseline\nwith 95% band", title = "Empirical Bayes prior", size = (600, 400)) #hide
+savefig(prior_plot, "ntr_prior_band.svg"); nothing # hide
+```
+
+![](ntr_prior_band.svg)
+
+
+```@example ntr-fit
+model = NeutralToTheRightModel( α, baseline, data)
+NTR_band_d, NTR_band_m, NTR_band_u = posterior_credible_band(0.05,3000,t,model)
+```
+
+## Cox-NTR workflow
 
 ```julia
-using NTRsurv
-using Distributions
+Z = [[randn()] for _ in eachindex(T)]
 
-T = rand(Weibull(2.5, 0.7), 200)
-δ = ones(Int, length(T))
+datareg = RegressionSurvivalData(T, δ, Z)
+coxmodel = CoxNeutralToTheRightModel([0.5], 5.0, baseline, datareg)
 
-data = SurvivalData(T, δ)
-baseline = ExponentialBaseline(1.0)
-model = NeutralToTheRightModel(5.0, baseline, data)
+znew = [0.2]
 
-t = collect(range(0.0, maximum(T), length = 100))
-
-Smean = mean_posterior_survival(t, model)
-lower, center, upper = posterior_credible_band(0.05, 1000, t, model)
+Smean_z = mean_posterior_survival(t, znew, coxmodel)
+lower_z, center_z, upper_z = posterior_credible_band(0.05, 1000, t, znew, coxmodel)
 ```
+
+## Credible bands
+
+The argument `p` in `posterior_credible_band(p, ...)` is the fraction of posterior paths discarded to form the envelope. Thus, `p = 0.05` gives an approximate 95% posterior credible band. The returned middle curve is the Monte Carlo posterior mean by default, or the Monte Carlo posterior median when `mu = false`.
+
+## Contents
+
+```@contents
+Pages = [
+    "index.md",
+    "api.md",
+]
+Depth = 2
+```
+
 ## Contents
 
 ```@contents

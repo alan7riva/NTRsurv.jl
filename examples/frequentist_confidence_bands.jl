@@ -1,400 +1,174 @@
 # In this file we include code for computation of fequentist confidence bands,
-# which is used in the `uncertainty_quantification_with_cox_regression`` tutorial.
-using Roots, ProgressMeter
-import LinearAlgebra: dot, cond, norm
-
-# Function for variance estimation of asymptotic band
-
-function u0_estim( time::Vector{Float64}, n_risk::Vector{Int64}, n_event::Vector{Int64})
-    v = zeros(length(time))
-    acc = 0.0
-    for i in eachindex(time)
-        if n_event[i] > 0
-            acc += n_event[i] / (n_risk[i]*(n_risk[i]-n_event[i]))
-        end
-        v[i] = acc
+# which is used in some of the examples folder tutorials.
+import LinearAlgebra: dot
+# Auxiliary step-function evaluation of  right-continuous step function at a single point.
+function step_eval(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real},
+    q::Real;
+    left::Real = 1.0
+)
+    i = searchsortedlast(x, q)
+    return i == 0 ? Float64(left) : Float64(y[i])
+end
+# Auxiliary step-function evaluation of  right-continuous step function at several points.
+function step_eval(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real},
+    q::AbstractVector{<:Real};
+    left::Real = 1.0
+)
+    return [step_eval(x, y, qi; left = left) for qi in q]
+end
+# Estimator for NTR Bernstein-von Mises theorem assymptotic Gaussian time scale U₀ 
+function Uestim(t::Vector{Float64},data::SurvivalData)
+    n = data.n
+    return step_eval(data.T, n *  cumsum(  data.nᵉ./data.R₁[1:end-1].^2.0 ), t; left=0.0)
+end
+# Sampler of asymptotic Gaussian processes in NTR Bernstein-von Mises theorem
+function BatU(t::Vector{Float64},U::Function)
+    v = zeros(length(t))
+    if t[1] == 0.0
+        v[1] = 0.0
+    else
+        v[1] = rand(Normal(0,sqrt( U(t[1])) ))
+    end
+    for i in 2:length(t)
+        v[i] = v[i-1] + rand(Normal(0,sqrt( U(t[i]) - U(t[i-1]) ) ))
     end
     return v
 end
-
-function u0_estim(km::KaplanMeier{Float64, Float64})
-    time = km.events.time
-    n_risk = km.events.natrisk
-    n_event = km.events.nevents
-    return u0_estim( time, n_risk, n_event)
-end
-
-# Functions for quantile computation needed for equal precission band
-# to be computed as
-#p = 0.975
-#qα = absmaxbrown_quantile(p,50)
-
-function absmaxbrown_cdf(x,K=10)
-    x <= 0 && return 0.0
-    s = 0.0
-    c = π^2 / (8x^2)
-    sign = 1.0
-    for k in 0:K
-        m =  2k +1
-        s += sign/m * exp(-m^2 * c)
-        sign = -sign
-    end
-    return (4/π)*s
-end
-
-function absmaxbrown_quantile(p,K=10)
-    f(x) = absmaxbrown_cdf(x,K) - p
-    return find_zero(f, (0.1,5.0))
-end
-
-# With p = 0.95, absmaxbrown_quantile(p,50) returns 2.2414027273321393
-#qα = 
-
-ep_qα_precomps = [ 2.2414027273321393, 2.4977054744104645 ] 
-
-# Function for equal precission confidence band computation
-
-function ep_confidence_band( α::Float64, km::KaplanMeier{Float64, Float64}, na::NelsonAalen{Float64, Float64})
-    qα = absmaxbrown_quantile(1-α,50)
-    T = km.events.time[end]
-    qαT = sqrt(T)*qα
-    n = sum(km.events.nevents)
-    σ² = n * u0_estim(km)
-    σ = sqrt.( σ² )
-    i_1 = findfirst( (σ² ./ (1 .+ σ²)) .>= 0.005 )
-    i_2 = findlast( (σ² ./ (1 .+ σ²)) .<= 0.995 )
-    survival = km.survival[i_1:i_2]
-    chaz = na.chaz[i_1:i_2]
-    l = (qαT/sqrt(n)) .* σ[i_1:i_2] ./ chaz
-    lower = survival.^exp.( l )
-    upper = survival.^exp.( -l )
-    lower = clamp.(lower,0,1)
-    upper = clamp.(upper,0,1)
-    return lower, survival, upper, km.events.time[i_1:i_2]
-end
-
-# Function for auxilliary computations of quantities needed for confidence bands in
-# Cox regression models
-function aux_comps( β::Vector{Float64},T::Vector{Float64},status::Vector{Int64},Z::Vector{Vector{Float64}})
-    sp = sortperm(T)
-    T = T[sp]
-    status = status[sp]
-    Z = Z[sp]
-    n = length(T)
-    p = length(Z[1])
-    η = [ dot(z,β) for z in Z ]
-    risk = exp.(η)
-    # S^(0)
-    S0 = cumsum(risk[end:-1:1])[end:-1:1]
-    # S^(1)
-    weightedZ = risk .* Z
-    S1 = cumsum(weightedZ[end:-1:1])[end:-1:1]
-    # S^(2)
-    weightedZ2 = [ risk[i]*( Z[i] * Z[i]' ) for i in 1:n]
-    S2 = cumsum(weightedZ2[end:-1:1])[end:-1:1]
-    uT = unique(T)
-    for t in uT
-        idx = findall(T .== t)
-        i0 = first(idx)
-        for j in idx
-            risk[j] = risk[i0]
-            S0[j] = S0[i0]
-            S1[j] = S1[i0]
-            S2[j] = S2[i0]  
-        end
-    end
-    return risk, S0, S1, S2, T, status, Z
-end
-
-# Function for auxilliary computations of quantities needed for confidence bands in
-# Cox regression models
-function aux_comps2( β::Vector{Float64},T::Vector{Float64},δ::Vector{Int64},Z::Vector{Vector{Float64}})
-    m = length(T)
-    sp = sortperm( T )
-    T = T[ sp ]
-    δ = δ[ sp ]
-    uT = unique(T)
-    n = length(uT)
-    p = length(Z[1])
-    Iᵉ = [ findall( (T .== v) .&& (δ .== 1.0) ) for v in unique(T) ]
-    Iᶜ = [ findall( (T .== v) .&& (δ .== 0.0) ) for v in unique(T) ]
-    dᵉ = length.(Iᵉ)
-    dᶜ = length.(Iᶜ)
-    Zᵉ = [ Z[v] for v in Iᵉ ]
-    Zᶜ = [ Z[v] for v in Iᶜ ] 
-    rᵉ = [ sum( [ exp( dot(β,v)) for v in Zᵉ[i] ], init=0.0) for i in 1:n ] # frequencies of exact bservations
-    rᶜ = [ sum( [ exp( dot(β,v)) for v in Zᶜ[i] ], init=0.0) for i in 1:n ] # frequencies of censored observations
-    zrᵉ = [ sum( [ exp( dot(β,v))*v for v in Zᵉ[i] ], init=zeros(p)) for i in 1:n ] # frequencies of exact bservations
-    zrᶜ = [ sum( [ exp( dot(β,v))*v for v in Zᶜ[i] ], init=zeros(p)) for i in 1:n ] # frequencies of censored observations
-    zmatrᵉ = [ sum( [ exp( dot(β,v))*v*v' for v in Zᵉ[i] ], init=zeros(p,p)) for i in 1:n ] # frequencies of exact bservations
-    zmatrᶜ = [ sum( [ exp( dot(β,v))*v*v' for v in Zᶜ[i] ], init=zeros(p,p)) for i in 1:n ] # frequencies of censored observations
-    Rᵉ = cumsum( rᵉ[end:-1:1] )[end:-1:1]
-    Rᶜ = cumsum( rᶜ[end:-1:1] )[end:-1:1]
-    zRᵉ = cumsum( zrᵉ[end:-1:1] )[end:-1:1]
-    zRᶜ = cumsum( zrᶜ[end:-1:1] )[end:-1:1]
-    zmatRᵉ = cumsum( zmatrᵉ[end:-1:1] )[end:-1:1]
-    zmatRᶜ = cumsum( zmatrᶜ[end:-1:1] )[end:-1:1]
-    S0 = Rᵉ .+ Rᶜ
-    S1 = zRᵉ .+ zRᶜ
-    S2 = zmatRᵉ .+ zmatRᶜ
-    Zbar = S1 ./ S0
-    return uT, dᵉ, S0, S1, S2, Zbar
-end
-
-# Function for extimation of vector part in bilinear form of aymptotic variance 
-# related to partial maximum likelihood estimation of regression coefficients
-function cox_hvec_zbar_estim(t, z0, β, expβz0, risk, S0, S1, Z, status, T)
-    n = length(T)
-    p = length(Z[1])
-    h = zeros(p)
-    Zbar_v = zeros(n,p)
-    for i in 1:n
-        if status[i] == 1 && T[i] <= t
-            Zbar_v[i,:] = S1[i] / S0[i]
-            w = (expβz0 / S0[i])
-            h += w * (z0 - Zbar_v[i,:])
-        end
-    end
-    return h, Zbar_v
-end
-
-# Function for extimation of vector part in bilinear form of aymptotic variance 
-# related to partial maximum likelihood estimation of regression coefficients
-function cox_hvec_estim(t, z0, expβz0, uT, dᵉ, S0, Zbar)
-    p = length(Z[1])
-    h = zeros(p)
-    k = findlast( uT .<= t )
-    if !isnothing(k)
-        for i in 1:k
-            h += expβz0* dᵉ[i]*(z0 - Zbar[i] )/S0[i]
-        end
-    end
-    return h
-end
-
-# Function for extimation of matrix part in bilinear form of aymptotic variance 
-# related to partial maximum likelihood estimation of regression coefficients
-function omega_estim( S0, S1, S2, Z, T, status)
-    n = length(T)
-    p = length(Z[1])
-    Ω = zeros(p,p)
-    for i in 1:n
-        if status[i] == 1
-            S0i = S0[i]
-            S1i = S1[i]
-            S2i = S2[i]
-            println(i)
-            Ω += (S2i / S0i) - (S1i * S1i') / S0i^2
-        end
-    end
-    # return nΩ and then account for Ω^{-1} = n (nΩ)^{-1}
-    return Ω
-end
-
-# Function for extimation of matrix part in bilinear form of aymptotic variance 
-# related to partial maximum likelihood estimation of regression coefficients
-function omega_estim( dᵉ, S0, S2, Zbar)
-    return sum( dᵉ.*( S2./S0 .- Zbar .* Zbar' ) )
-end
-
-# Function for estimation of asymptotic variance, accounting for varaince do to 
-# Breslow estimator and maximum partial likelihood regression coefficients
-function σ_estim( z0::Vector{Float64}, β::Vector{Float64},T::Vector{Float64},status::Vector{Int64},Z::Vector{Vector{Float64}})
-    risk, S0, S1, S2, T, status, Z = aux_comps(β,T,status,Z)
-    println( "Max S1:  ", maximum(norm.(S1)) )
-    uT = unique(T[status .== 1])
-    expβz0 = exp(dot(β,z0))
-    n = length(T)
-    p = length(Z[1])
-    l = length(uT)
-    Ω = omega_estim( risk, S0, S1, S2, Z, T, status)
-    println( "Cond:  ", cond(Ω) )
-    σ² = zeros(l)
-    for k in 1:l
-        h, _ = cox_hvec_zbar_estim(uT[k], z0, β, expβz0, risk, S0, S1, Z, status, T)
-        for i in 1:n
-            if status[i] == 1 && T[i] <= uT[k]
-                σ²[k] += ( expβz0 / S0[i])^2 
-            end
-        end
-        σ²[k] +=  dot(h, Ω \ h)
-    end
-    return sqrt.( σ²)
-end
-
-# Function for estimation of asymptotic variance, accounting for varaince do to 
-# Breslow estimator and maximum partial likelihood regression coefficients
-function σ_estim( z0, β, uT, dᵉ, S0, S2, Zbar)
-    ind_e = dᵉ .> 0 
-    uTe = uT[ind_e]
-    de = dᵉ[ind_e]
-    S0e = S0[ind_e]
-    Zbare = Zbar[ind_e]
-    k = length(uTe)
-    σ² = zeros(k)
-    expβz0 = exp(dot(β,z0))
-    Ω = omega_estim( dᵉ, S0, S2, Zbar)
-    s_run = 0.0
-    for i in 1:k
-        h = cox_hvec_estim( uTe[i], z0, expβz0, uTe, de, S0e, Zbare)
-        s_run +=  de[i] * (expβz0/S0e[i])^2.0 
-        σ²[i] = s_run + dot(h, Ω \ h)
-    end
-    return sqrt.( σ²)
-end
-
-function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t::Vector{Float64},z0::Vector{Float64},β::Vector{Float64},T::Vector{Float64},status::Vector{Int64},Z::Vector{Vector{Float64}})
-    risk, S0, S1, S2, T, status, Z = aux_comps(β,T,status,Z)
-    if minimum(t) < T[ findfirst(status .== 1 ) ]
-        @error "ERROR: Evaluation array 't' starts befor first exact observation in data."
-    end
-    expβz0 = exp(dot(β,z0))
-    n = length(T)
-    p = length(Z[1])
-    l = length(t)
-    Ω = omega_estim( risk, S0, S1, S2, Z, T, status)
-    Ωinv = inv(Ω)
-    v = zeros(m)
-    u = zeros(l,n)
-    σ² = zeros(l)
-    for k in 1:l
-        h, Zbar_v = cox_hvec_zbar_estim(t[k], z0, β, expβz0, risk, S0, S1, Z, status, T)
-        f_tmp = h' * Ωinv
-        for i in 1:n
-            if status[i] == 1
-                u[k,i] += f_tmp*( Z[i] .- Zbar_v[i,:] )
-                if T[i] <= t[k]
-                    s0i_tmp = S0[i]
-                    σ²[k] += ( expβz0 / s0i_tmp)^2 
-                    u[k,i] +=  expβz0 / s0i_tmp
-                end
-            end
-        end
-        σ²[k] +=  f_tmp*h
-    end
-    println("Monte-Carlo quantile computation")
-    prog = Progress( n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50)
-    for j in 1:m
-        ϵ = rand( Normal(),n)
-        v[j] = maximum( [ abs( sum( ϵ .* u[k,:])/sqrt( σ²[k] ) ) for k in 1:l] )
-        next!(prog)
-    end
-    return quantile(v,1-α)
-end
-
-function quantile_weighted_transformed_cox_wild_bootstrap(m::Int64,α::Float64,t::Vector{Float64},z0::Vector{Float64},β::Vector{Float64},T::Vector{Float64},δ::Vector{Int64},Z::Vector{Vector{Float64}})
-    if minimum(t) < minimum(T[ δ .== 1  ])
-        @error "ERROR: Evaluation array 't' starts befor first exact observation in data.."
-    end
-    uT, dᵉ, S0, S1, S2, Zbar = aux_comps(β,T,δ,Z)
-    n = length(uT)
-    expβz0 = exp(dot(β,z0))
-    Ω = omega_estim( dᵉ, S0, S2, Zbar)
-    p = length(Z[1])
-    l = length(t)
-    v = zeros(m)
-    u = zeros(l,n)
-    σ² = zeros(l)
+# Auxilliary function for `l` simulations of the asymptotic NTR Bernstein-von Mises theorem Gaussian distributions in an array `t`
+# ordered in an `l×length(t)` matrix
+function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},Skm::Vector{Float64},U::Function)
+    S_mat =  Matrix{eltype(t)}(undef, l, length(t))
     for i in 1:l
-        h = cox_hvec_estim( t[i], z0, expβz0, uT, dᵉ, S0, Zbar)
-        j = findlast( uT .<= t[i] )    
-        if !isnothing(j)
-            for k in 1:j
-                σ²[i] += dᵉ[k]*(expβz0/S0[k])^2.0
-                u[i,k] += sqrt(dᵉ[k])*( expβz0/S0[k] + dot(h, Ω \ (z0 - Zbar[k] ) ) )
-            end
-        else
-            j=0
-        end
-        for k in (j+1):n
-            u[i,k] += sqrt(dᵉ[k])*dot(h, Ω \ (z0 - Zbar[k] ) )
-        end
-        σ²[i] +=  dot(h, Ω \ h)
+        S_mat[i,:] = Skm .* exp.( -BatU(t,U)/sqrt(n) )
     end
-    println("Monte-Carlo quantile computation")
-    prog = Progress( n, dt=0.5, barglyphs=BarGlyphs("[=> ]"), barlen=50)
-    for j in 1:m
-        ϵ = rand( Normal(),n)
-        v[j] = maximum( [ abs( sum( ϵ .* u[k,:])/sqrt( σ²[k] ) ) for k in 1:l] )
-        next!(prog)
+    return S_mat
+end
+# Breslow estimator for cumulative hazard in frequentist Cox models
+function BreslowEstimCoxModel(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    status = getfield.(model.mf.data.event, :status)
+    n = length(status)
+    M =  modelmatrix(model)
+    η = M * c_freq
+    risk = exp.(η)
+    R = cumsum( risk[end:-1:1] )[end:-1:1]
+    return cumsum( [ (δ[i]==1) ? 1.0./R[i] : 0.0 for i in 1:n] ) 
+end
+# Auxilliary function for numerical integration with trapezoidal rule
+function trapz(x::AbstractVector, y::AbstractVector)
+    return sum( 0.5 .* (y[1:end-1] .+ y[2:end]) .* diff(x) )
+end
+# Auxilliary function for numerical integration with trapezoidal rule with cumulative output
+function cumtrapz(x::AbstractVector, y::AbstractVector)
+    out = zeros(length(x))
+    for j in 2:length(x)
+        out[j] = out[j-1] + 0.5 * (y[j-1] + y[j]) * (x[j] - x[j-1])
     end
-    return quantile(v,1-α)
+    return out
+end
+# Monte-Carlo computation for Cox regression asymptotic variance components, Fisher information 
+# per observation `I_MC`, extra regression coefficient variance component `V_MC` and assymptotic 
+# Gaussian time scale `U_MC`
+function cox_vars_MC(M::Int,t::Vector{Float64},b₀::Float64,k::Float64,λ::Float64,Dz::Distribution,b::Float64 = b₀)
+    MC_Z = rand(Dz, M)
+    MC_Zv = [ z[1] for z in MC_Z ] 
+    l = length(t)
+    H = (t./λ).^k
+    r₀ =  exp.( b₀ .* MC_Zv )
+    logr = b .* MC_Zv  
+    Z2 = MC_Zv .^ 2
+    S0 = zeros(l)
+    S1 = zeros(l)
+    S2 = zeros(l)
+    integrand = zeros(l)
+    for j in 1:l
+        w = exp.( logr .- r₀.*H[j] )
+        S0[j] = mean( w )
+        S1[j] = mean( MC_Zv.*w )
+        S2[j] = mean( MC_Zv.^2.0 .* exp.( logr .- r₀.*H[j] ) )
+        integrand[j] = S2[j] - S1[j]^2 / S0[j]
+    end
+    I_MC = trapz(H, integrand)
+    U_MC = cumtrapz(H, 1.0 ./ S0)
+    V_MC = cumtrapz(H, S1 ./ S0)
+    return I_MC, V_MC, U_MC
 end
 
-function Breslow_estimator(β::Vector{Float64},T::Vector{Float64},δ::Vector{Int64},Z::Vector{Vector{Float64}})
-    sp = sortperm(T)
-    T = T[sp]
-    δ = δ[sp]
-    Z = Z[sp]
-    n = length(T)
-    p = length(Z[1])
-    η = [ dot(z,β) for z in Z]
-    r = exp.(η)
-    R = cumsum( r[end:-1:1] )[end:-1:1]
-    uT = unique(T)
-    H = Float64[]
-    times = Float64[]
-    cumhaz = 0.0
-    for t in uT
-        idx = findall(T .== t)
-        # number of events at time t
-        d = sum(δ[idx])
+# Estimators for observed Cox regression asymptotic variance components, Fisher information 
+# per observation `I_obs`, extra regression coefficient variance component `V_obs` and assymptotic 
+# Gaussian time scale `U_obs`
+function cox_var_obs(t::Vector{Float64},c::Float64,D::RegressionSurvivalData)
+    n = length(D.Z)
+    η = [dot( c, v) for v in   D.Z]
+    Zv = [ z[1] for z in D.Z ] 
+    w = exp.(η)
+    # Risk sums: R_i(c) = sum_{j: T_j >= T_i} exp(c z_j)
+    S0obs = reverse(cumsum(reverse(w)))
+    S1obs = reverse(cumsum(reverse(w .* Zv)))
+    S2obs = reverse(cumsum(reverse(w .* Zv.^2.0)))
+    # Observed information:
+    # sum over events of weighted risk-set variance of z
+    Iobs = mean( D.δ .* ( S2obs ./ S0obs .- (S1obs ./ S0obs).^2 ) )
+    Uobs = step_eval( D.T, n.*cumsum(D.δ ./ S0obs.^2.0), t; left = 0.0)
+    Vobs = step_eval( D.T, cumsum(D.δ .* S1obs ./ S0obs.^2.0), t; left = 0.0)
+    return Iobs,  Vobs, Uobs
+end
+# Auxilliary function for `l` simulations of the asymptotic Cox NTR Bernstein-von Mises theorem Gaussian distributions in an array `t`
+# ordered in an `l×length(t)` matrix
+function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},κbr::Vector{Float64},g::Vector{Float64},z::Vector{Float64},
+            U::Function,V::Vector{Float64},I::Float64)
+    d = length(g)
+    #Sbr = exp.(-κbr)
+    S_mats =  [ Matrix{eltype(t)}(undef, l, length(t)) for _ in 1:d ]
+    for i in 1:l
+        W = rand(Normal())
+        Bu = BatU(t,U)
+        for j in 1:d
+            Sbr_j = exp.(-g[j] .* κbr)
+            S_mats[j][i,:] = Sbr_j .* exp.( -g[j]*( ( V .- κbr.*z[j] ).*W./sqrt(I)  - Bu )  /sqrt(n) )
+        end
+    end
+    return S_mats
+end
+# Auxilliary Linear predictors for Cox partial likelihood
+cox_eta(c::Real, z::AbstractVector{<:Real}) = c * z[1]
+cox_eta(c::AbstractVector{<:Real}, z::AbstractVector{<:Real}) = dot(c, z)
+# Cox partial likelihood
+function cox_partial_loglik_norep(c::Union{Real,AbstractVector{<:Real}}, D::RegressionSurvivalData)
+    η = [ cox_eta(c, z) for z in D.Z]
+    w = exp.(η)
+    # Risk sums: R0[i] = sum_{j:T_j >= T_i} exp(c Z_j)
+    R0 = reverse(cumsum(reverse(w)))
+    return sum(D.δ .* (η .- log.(R0)))
+end
+function cox_partial_loglik_rep(c::Union{Real,AbstractVector{<:Real}}, D::RegressionSurvivalData)
+    ll = 0.0
+    R0 = 0.0
+    @inbounds for j in D.n:-1:1
+        for z in D.Zᵉ[j]
+            R0 += exp( cox_eta(c, z) )
+        end
+        for z in D.Zᶜ[j]
+            R0 += exp( cox_eta(c, z) )
+        end
+        d = D.nᵉ[j]
         if d > 0
-            # Breslow increment
-            increment = d / R[first(idx)]
-            cumhaz += increment
-            push!(H, cumhaz)
-            push!(times, t)
+            ll += sum( cox_eta(c, z) for z in D.Zᵉ[j] ) - d * log(R0)
         end
     end
-    return H, times
+    return ll
 end
-
-function ep_bands( z0::Vector{Float64},β::Vector{Float64},T::Vector{Float64}, δ::Vector{Int64},Z::Vector{Vector{Float64}}, qα::Float64)
-    H, T_2 = Breslow_estimator(β,T,δ,Z)
-    σ =  σ_estim( z0, β,T,δ,Z)
-    S = exp.( -H .* exp( dot(β,z0) ) )
-    l = qα .* σ ./ H
-    lower = S.^exp.( l )
-    upper = S.^exp.( -l )
-    lower = clamp.(lower,0,1)
-    upper = clamp.(upper,0,1)
-    return lower[1:end-1], upper[1:end-1], S, T_2
+function cox_partial_loglik(c::Union{Real,AbstractVector{<:Real}}, D::RegressionSurvivalData)
+    if hasproperty(D, :Zᵉ)
+        return cox_partial_loglik_rep(c,D)
+    else
+        return cox_partial_loglik_norep(c,D)
+    end
 end
-
-function ep_bands( z0::Vector{Float64},β::Vector{Float64},T::Vector{Float64}, δ::Vector{Int64},Z::Vector{Vector{Float64}}, qα::Float64)
-    H, T_2 = Breslow_estimator(β,T,δ,Z)
-    uT, dᵉ, S0, S1, S2, Zbar = aux_comps(β,T,δ,Z)
-    σ =  σ_estim( z0, β, uT, dᵉ, S0, S2, Zbar)
-    S = exp.( -H .* exp( dot(β,z0) ) )
-    l = qα .* σ ./ H
-    lower = S.^exp.( l )
-    upper = S.^exp.( -l )
-    lower = clamp.(lower,0,1)
-    upper = clamp.(upper,0,1)
-    return lower[1:end-1], upper[1:end-1], S, T_2
-end
-
-function boot_chaz( df::DataFrame, z_keys::Vector{Symbol})
-    n = nrow(df)
-    inds = rand(1:n,n)
-    df_boot = df[inds,:]
-    freq_cox_model_boot = Survival.coxph( Term(:event) ~ sum(Term.(z_keys)) , df_boot; tol=1e-8)
-    c_boot = coef(freq_cox_model_boot)
-    H_boot, T_boot = Breslow_estimator( c_boot, getproperty.( df[inds,:event], :time), Int.(getproperty.( df[inds,:event], :status)), [ Vector(df[i, z_keys ]) for i in inds ] )
-    return T_boot, H_boot, c_boot
-end
-
-function interp_surv( t::Float64, T::Vector{Float64}, S::Vector{Float64})
-    i = searchsortedlast(T, t)
-    return i == 0 ? 1.0 : S[i]
-end
-
-function interp_surv( t::Vector{Float64}, T::Vector{Float64}, S::Vector{Float64})
-    return [interp_surv( ti, T, S) for ti in t]
-end
-
-function bootstrap_survival(l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
+function bootstrap_survival(l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
     S_boot_mat = zeros(l,length(t))
     for i in 1:l
         T_boot, H_boot, c_boot = boot_chaz( df, z_keys)
@@ -404,62 +178,8 @@ function bootstrap_survival(l::Int64,t::Vector{Float64}, z_new::Vector{Float64},
     return S_boot_mat
 end
 
-function credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
-    if  !( 0 < p < 1)
-        @error "ERROR: p is not between zero and one."
-    end 
-    l,k = size(S)
-    m = round( Int, l*p)
-    for _ in 1:m
-        b = zeros(Float64, k)
-        for i in 1:k
-            b[i] = maximum(S[:,i])-minimum(S[:,i])
-        end
-        b_max_index = sortperm(b)[end]
-        s_out_index = findmax( abs.( S[:,b_max_index] .- median(S[:,b_max_index]) ) )[2]
-        S = S[1:end .!= s_out_index, 1:end  ]
-    end
-    band_u = [ maximum(S[:,i]) for i in 1:k]
-    band_d = [ minimum(S[:,i]) for i in 1:k]
-    band_m = zeros(k)
-    if μ
-        band_m = mean(S,dims=1)[1:end]
-    else
-        band_m = median(S,dims=1)[1:end]
-    end
-    return band_d, band_m, band_u
-end
 
-function bootstrap_credible_band( p::Float64, l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
+function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
     S_boot =  bootstrap_survival( l, t, z_new, df, z_keys)
     return credible_band( p, S_boot)
-end
-
-function log_partial_likelihood(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
-    β = coef(model)
-    δ = Int.(getproperty.(model.mf.data.event, :status))
-    T = getproperty.(model.mf.data.event, :time)
-    # sort by time
-    sp = sortperm(T)
-    T = T[sp]
-    δ = δ[sp]
-    M = modelmatrix(model)
-    M = M
-    η = M * β
-    r = exp.(η)
-    # risk set sums (same as your Breslow code)
-    R = cumsum(r[end:-1:1])[end:-1:1]
-    uT = unique(T)
-    loglik = 0.0
-    for t in uT
-        idx = findall(T .== t)
-        d = sum(δ[idx])
-        if d > 0
-            # sum of linear predictors for events at time t
-            event_sum = sum(η[idx] .* δ[idx])
-            # log partial likelihood contribution
-            loglik += event_sum - d * log(R[first(idx)])
-        end
-    end
-    return loglik
 end
