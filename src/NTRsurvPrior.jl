@@ -170,20 +170,8 @@ Construct `Baseline` object corresponding to an empirically Bayesian exponential
 hazard with rate which either matches the mean of all 
 observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
 """
-function EmpiricalBayesBaseline(data::SurvivalData;exact::Bool=true)
-    if exact
-        if isa(data,SurvivalDataNoRep)
-            return ExponentialBaseline(1/mean(data.T[data.δ .== 1]))
-        else
-            return ExponentialBaseline(sum( data.nᵉ )/sum( data.nᵉ  .*  data.T))
-        end
-    else
-        if isa(data,SurvivalDataNoRep)
-            return ExponentialBaseline(1/mean(data.T))
-        else
-            return ExponentialBaseline(sum( data.nᵉ .+ data.nᶜ )/sum( (data.nᵉ .+ data.nᶜ) .* data.T))
-        end
-    end
+function EmpiricalBayesBaseline(data::SurvivalData)
+    return ExponentialBaseline( sum(data.nᵉ) / sum((data.nᵉ .+ data.nᶜ) .* data.T) )
 end
 
 function _sample_prior_survival( t::Array{Float64}, α::Float64, β::Float64, baseline::Baseline)
