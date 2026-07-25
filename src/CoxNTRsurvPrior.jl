@@ -587,6 +587,26 @@ function sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},mode
     return _sample_posterior_survival(t,z_new,model)
 end
 
+function sample_posterior_survival(t::Array{Float64},z_news::Vector{Vector{Float64}},
+    model::CoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    c = model.c
+    g = model.g
+    p = length(z_news[1])
+    if z_ref === nothing
+        z_ref = zeros(Float64, p)
+        for j in 1:p
+            z_ref[j] = median([z[j] for z in model.data.Z])
+        end
+    end
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    g_ref = g(c,z_ref)
+    surv_ref = _sample_posterior_survival(t,z_ref,model)
+    log_surv_ref = log.(surv_ref)
+    return [ exp.((g(c, z) / g_ref) .* log_surv_ref) for z in z_news  ]
+end
+
 function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
@@ -597,6 +617,34 @@ function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Floa
     end
     return S_mat
 end
+
+function sample_posterior_survival( l::Int64, t::Vector{Float64}, z_news::Vector{Vector{Float64}},
+    model::CoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    c = model.c
+    g = model.g
+    p = length(z_news[1])
+    if z_ref === nothing
+        z_ref = zeros(Float64, p)
+        for j in 1:p
+            z_ref[j] = median([z[j] for z in model.data.Z])
+        end
+    end
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    g_ref = g(c, z_ref)
+    powers = [ g(c, z)/g_ref for z in z_news]
+    S_mats = [ Matrix{Float64}(undef, l, length(t)) for _ in eachindex(z_news) ]
+    for i in 1:l
+        surv_ref = _sample_posterior_survival(t, z_ref, model)
+        log_surv_ref = log.( surv_ref )
+        for j in eachindex(z_news)
+            S_mats[j][i, :] .= exp.( powers[j] .* log_surv_ref)
+        end
+    end
+    return S_mats
+end
+
 """
     CoxNeutralToTheRightFullyBayesianModel
 
@@ -651,4 +699,33 @@ function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, m
         S_mat[i,:] = _sample_posterior_survival(t,z_new,Cox_model)
     end
     return S_mat
+end
+
+function sample_posterior_survival( t::Array{Float64}, z_news::Vector{Vector{Float64}}, 
+    model::CoxNeutralToTheRightFullyBayesianModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    p = length(z_news[1])
+    if z_ref === nothing
+        z_ref = zeros(Float64, p)
+        for j in 1:p
+            z_ref[j] = median([z[j] for z in model.data.Z])
+        end
+    end
+    if !iszero(t[1])
+        t = [0.0;t]
+    end
+    m = length(model.c_vec)
+    g = model.g
+    S_mats = [ Matrix{Float64}(undef, l, length(t)) for _ in eachindex(z_news) ]
+    for i in 1:m
+        c_tmp = model.c_vec[i]
+        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, g, model.data)
+        g_ref = g(c_tmp, z_ref)
+        powers = [ g(c_tmp, z)/g_ref for z in z_news]
+        surv_ref = _sample_posterior_survival(t, z_ref, Cox_model)
+        log_surv_ref = log.( surv_ref )
+        for j in eachindex(z_news)
+            S_mats[j][i, :] .= exp.( powers[j] .* log_surv_ref)
+        end
+    end
+    return S_mats
 end

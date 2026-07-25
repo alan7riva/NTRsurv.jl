@@ -60,7 +60,6 @@ function BreslowEstimCoxModel_with_time(model::StatsModels.TableRegressionModel{
     sp = sortperm(T)
     T = T[sp]
     δ = δ[sp]
-    risk = risk[sp]
     Tu = unique(T)
     d = zeros(Int64, length(Tu))
     R = zeros(Float64, length(Tu))
@@ -72,6 +71,7 @@ function BreslowEstimCoxModel_with_time(model::StatsModels.TableRegressionModel{
         R[j] = sum(risk[T .>= tj])
     end
     H = cumsum(d ./ R)
+    println(mean(d))
     return H, Tu
 end
 
@@ -347,10 +347,24 @@ function Sfreq_mat( l::Int64, n::Int64, t::Vector{Float64}, κbr::Vector{Float64
             Sbr_j = exp.(-g[j] .* κbr)
             # Rowwise value of (V(t) - κbr(t) z_j)' X
             reg_j = VX .- κbr .* dot(z[j], X)
-            S_mats[j][i,:] = Sbr_j .* exp.( g[j] .* (reg_j .- Bu) ./ sqrt(n) )
+            S_mats[j][i,:] = Sbr_j .* exp.( - g[j] .* (reg_j .- Bu) ./ sqrt(n) )
         end
     end
     return S_mats
+end
+
+
+function freq_confidence_bands( p::Float64, l::Int64, t::Vector{Float64}, zv::Vector{Vector{Float64}}, c_freq::Vector{Float64},
+    dataregre::RegressionSurvivalData,model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    n = length(dataregre.Z)
+    gv = [exp(dot(c_freq, z)) for z in zv]
+    c_freq = coef(model)
+    Hfreq = BreslowEstimCoxModel(model);
+    fisherI_obs, V_obs, U_obs  = cox_var_obs(t,c_freq,dataregre)
+    fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
+    Hv = step_eval(dataregre.T, Hfreq, t; left = 0.0)
+    Sfreqdraws = Sfreq_mat(l, n, t, Hv, gv, zv, fU_obs, V_obs, fisherI_obs)
+    return [ credible_band(p, Sfreqdraws[j]) for j in eachindex(zv) ]
 end
 
 # Cox partial likelihood
@@ -361,6 +375,7 @@ function cox_partial_loglik_norep(c::Union{Real,AbstractVector{<:Real}}, D::Regr
     R0 = reverse(cumsum(reverse(w)))
     return sum(D.δ .* (η .- log.(R0)))
 end
+
 function cox_partial_loglik_rep(c::Union{Real,AbstractVector{<:Real}}, D::RegressionSurvivalData)
     ll = 0.0
     R0 = 0.0
@@ -378,6 +393,7 @@ function cox_partial_loglik_rep(c::Union{Real,AbstractVector{<:Real}}, D::Regres
     end
     return ll
 end
+
 function cox_partial_loglik(c::Union{Real,AbstractVector{<:Real}}, D::RegressionSurvivalData)
     if hasproperty(D, :Zᵉ)
         return cox_partial_loglik_rep(c,D)
@@ -411,3 +427,4 @@ function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_n
     S_boot =  bootstrap_survival( l, t, z_new, df, z_keys)
     return credible_band( p, S_boot)
 end
+
