@@ -74,8 +74,8 @@ function posterior_credible_band( p::Float64, t::Vector{Float64}, z_new::Vector{
     return credible_band( p, S, μ)
 end
 
-function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_news::Vector{Vector{Float64}}, 
+function posterior_credible_band( p::Float64, t::Vector{Float64}, z_news::Vector{Vector{Float64}}, 
     model::CoxNeutralToTheRightFullyBayesianModel, μ::Bool=true; z_ref::Union{Nothing,Vector{Float64}} = nothing)
-    Smats = sample_posterior_survival(l,t,z_news,model;z_ref)
+    Smats = sample_posterior_survival(t,z_news,model;z_ref)
     return [ credible_band(p, Smats[j],μ) for j in eachindex(z_news) ]
 end

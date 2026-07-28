@@ -71,13 +71,12 @@ function BreslowEstimCoxModel_with_time(model::StatsModels.TableRegressionModel{
         R[j] = sum(risk[T .>= tj])
     end
     H = cumsum(d ./ R)
-    println(mean(d))
     return H, Tu
 end
 
 # Breslow estimator for cumulative hazard in frequentist Cox models
 function BreslowEstimCoxModel(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
-    H, _ = BreslowEstimCoxModel_with_time(model)
+    H, _ = BreslowEstimCoxModel_with_time(model);
     return H
 end
 
@@ -313,7 +312,6 @@ end
 function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},κbr::Vector{Float64},g::Vector{Float64},z::Vector{Float64},
             U::Function,V::Vector{Float64},I::Float64)
     d = length(g)
-    #Sbr = exp.(-κbr)
     S_mats =  [ Matrix{eltype(t)}(undef, l, length(t)) for _ in 1:d ]
     for i in 1:l
         W = rand(Normal())
@@ -324,6 +322,19 @@ function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},κbr::Vector{Float64},g:
         end
     end
     return S_mats
+end
+
+function freq_asymptotic_draws( l::Int64, t::Vector{Float64}, z::Vector{Float64}, 
+    model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    n = length(dataregre.Z)
+    c_freq = coef(model)
+    g = exp(dot(c_freq, z))
+    Hfreq = BreslowEstimCoxModel(model);
+    fisherI_obs, V_obs, U_obs  = cox_var_obs(t,c_freq,dataregre)
+    fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
+    Hv = step_eval(dataregre.T, Hfreq, t; left = 0.0)
+    Sfreqdraws = Sfreq_mat(l, n, t, Hv, g, z, fU_obs, V_obs, fisherI_obs)
+    return Sfreqdraws
 end
 
 function Sfreq_mat( l::Int64, n::Int64, t::Vector{Float64}, κbr::Vector{Float64}, g::Vector{Float64},
@@ -353,12 +364,24 @@ function Sfreq_mat( l::Int64, n::Int64, t::Vector{Float64}, κbr::Vector{Float64
     return S_mats
 end
 
+function freq_asymptotic_draws( l::Int64, t::Vector{Float64}, zv::Vector{Vector{Float64}}, 
+    model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    n = length(dataregre.Z)
+    c_freq = coef(model)
+    gv = [exp(dot(c_freq, z)) for z in zv]
+    Hfreq = BreslowEstimCoxModel(model);
+    fisherI_obs, V_obs, U_obs  = cox_var_obs(t,c_freq,dataregre)
+    fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
+    Hv = step_eval(dataregre.T, Hfreq, t; left = 0.0)
+    Sfreqdraws = Sfreq_mat(l, n, t, Hv, gv, zv, fU_obs, V_obs, fisherI_obs)
+    return Sfreqdraws
+end
 
-function freq_confidence_bands( p::Float64, l::Int64, t::Vector{Float64}, zv::Vector{Vector{Float64}}, c_freq::Vector{Float64},
+function freq_confidence_bands( p::Float64, l::Int64, t::Vector{Float64}, zv::Vector{Vector{Float64}},
     dataregre::RegressionSurvivalData,model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     n = length(dataregre.Z)
-    gv = [exp(dot(c_freq, z)) for z in zv]
     c_freq = coef(model)
+    gv = [exp(dot(c_freq, z)) for z in zv]
     Hfreq = BreslowEstimCoxModel(model);
     fisherI_obs, V_obs, U_obs  = cox_var_obs(t,c_freq,dataregre)
     fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
@@ -422,9 +445,26 @@ function bootstrap_survival(l::Int64, t::Vector{Float64}, z_new::Vector{Float64}
     return S_boot_mat
 end
 
+function bootstrap_survival(l::Int64, t::Vector{Float64}, z_news::Vector{Vector{Float64}}, df::DataFrame, z_keys::Vector{Symbol})
+    d = length(z_news)
+    S_boot_mats = [ Matrix{eltype(t)}(undef, l, length(t)) for _ in 1:d ]
+    for i in 1:l
+        T_boot, H_boot, c_boot = boot_chaz( df, z_keys)
+        H_boot_t = step_eval( T_boot, H_boot, t;left = 0.0)
+        for j in 1:d
+            S_boot_mats[j][i, :] = exp.( -exp(dot(c_boot, z_news[j])) .* H_boot_t)
+        end
+    end   
+    return S_boot_mats
+end
 
 function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
     S_boot =  bootstrap_survival( l, t, z_new, df, z_keys)
     return credible_band( p, S_boot)
+end
+
+function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_news::Vector{Vector{Float64}}, df::DataFrame, z_keys::Vector{Symbol})
+    S_boots =  bootstrap_survival( l, t, z_news, df, z_keys)
+    return  [ credible_band(p, S_boots[j]) for j in eachindex(z_news) ]
 end
 

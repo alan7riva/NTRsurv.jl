@@ -713,10 +713,10 @@ function sample_posterior_survival( t::Array{Float64}, z_news::Vector{Vector{Flo
     if !iszero(t[1])
         t = [0.0;t]
     end
-    m = length(model.c_vec)
+    l = length(model.c_vec)
     g = model.g
     S_mats = [ Matrix{Float64}(undef, l, length(t)) for _ in eachindex(z_news) ]
-    for i in 1:m
+    for i in 1:l
         c_tmp = model.c_vec[i]
         Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, g, model.data)
         g_ref = g(c_tmp, z_ref)
