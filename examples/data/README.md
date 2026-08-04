@@ -7,7 +7,7 @@ This folder contains datasets used in the example notebooks for the package.
 ## tongue.csv
 
 Description:
-Tongue cancer survival times with censoring indicators with 80 rows. 
+Tongue cancer survival data. 
 
 Source:
 Klein and Moeschberger (1997) Survival Analysis Techniques for Censored and truncated data, Springer. Sickle-Santanello et al. Cytometry 9 (1988): 594-599. Obtained from R package `survival` (LGPL>=2 license).
@@ -35,5 +35,18 @@ Criminal recidivism data of 432 convicts who were released from Maryland state p
 
 Source:
 Rossi, P.H., R.A. Berk, and K.J. Lenihan (1980). Money, Work, and Crime: Some Experimental Results. New York: Academic Press. Obtained from Julia package `Survival.jl` (MIT license).
+
+---
+
+## brcamcsurvdata.csv
+
+Description:
+Survival data of breast cancer cohorts.
+
+Source:
+Caballe Mestres A, Berenguer Llergo A, Stephan-Otto Attolini C (2024). mcsurvdata: Meta cohort survival data. R package version 1.24.0, <https://github.com/adricaba/mcsurvdata>.  
+
+Modifications:
+Omitted observations with `missing` cohort.
 
 ...

@@ -161,7 +161,7 @@ with learning rate `γ`, initial chain state `s₀` and standard deviation `σ�
 a progress meter bar, while `show_progress=false` supresses it.
 """
 function robbins_monro_mh_tune(n::Int64,b::Int64,lf::Function,s₀::Float64,σ₀::Float64,
-        p_acc::Float64,γ::Float64,show_progress::Bool=true)
+        p_acc::Float64,γ::Float64; show_progress::Bool=true)
     if show_progress
         return robbins_monro_mh_tune_with_progress(n,b,lf,s₀,σ₀,p_acc,γ)
     else
@@ -218,11 +218,11 @@ implemented in `random_walk_mh(b,lf,s,lfs,prop_σ)`, with the Robbins-Monro algo
 a progress meter bar, while `show_progress=false` supresses it.
 """
 function robbins_monro_mh_within_gibbs_tune(n::Int64,b::Int64,lf::Function,s₀::Vector{Float64},σ₀::Vector{Float64},
-        p_acc::Vector{Float64},γ::Float64,show_progress::Bool=true)
+        p_acc::Vector{Float64},γ::Float64; show_progress::Bool=true)
     if show_progress
         return robbins_monro_mh_within_gibbs_tune_with_progress(n,b,lf,s₀,σ₀,p_acc,γ)
     else
-        return robbins_monro_mh_within_blocked_gibbs_tune_without_progress(n,b,lf,s₀,σ₀,p_acc,γ)
+        return robbins_monro_mh_within_gibbs_tune_without_progress(n,b,lf,s₀,σ₀,p_acc,γ)
     end
 end
 
@@ -268,7 +268,7 @@ end
 end
 
 function robbins_monro_mh_within_blocked_gibbs_tune( n::Int64, b::Int64, lf::Vector{Function}, blocks::Vector{UnitRange{Int64}}, s₀::Vector{Float64},σ₀::Vector{Float64},
-        p_acc::Vector{Float64},γ::Float64,show_progress::Bool=true)
+        p_acc::Vector{Float64},γ::Float64; show_progress::Bool=true)
     if show_progress
         return robbins_monro_mh_within_blocked_gibbs_tune_with_progress( n, b, lf, blocks, s₀, σ₀, p_acc, γ)
     else
