@@ -35,8 +35,6 @@ end
     data = SurvivalData( T, δ )
     b = EmpiricalBayesBaseline(data)
     @test b isa Baseline
-    b = EmpiricalBayesBaseline(data,exact=false)
-    @test b isa Baseline
     model = NeutralToTheRightModel( 5.0, b, data)
     t =  collect(LinRange(0.0,maximum(T)+1,100)) # evaluation grid
     test_survival_curve(mean_posterior_survival(t, model))
@@ -46,7 +44,7 @@ end
     test_survival_curve(NTR_band_m)
     Trep = [ T[1:30]; T[1:30]; T[1:30]]
     datarep = SurvivalData( Trep, δ )
-    b = EmpiricalBayesBaseline(datarep,exact=false)
+    b = EmpiricalBayesBaseline(datarep)
     @test b isa Baseline
     modelrep = NeutralToTheRightModel( 5.0, b, datarep)
     test_survival_curve(mean_posterior_survival(t, modelrep))
