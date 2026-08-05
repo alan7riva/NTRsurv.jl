@@ -1,0 +1,7 @@
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+NTRsurv = "44a71bb7-9d27-4d6a-8d2f-9a31f1763d85"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+Survival = "8a913413-2070-5976-9d4c-2b364fdc2f7f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
