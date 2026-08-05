@@ -90,10 +90,6 @@ Depth = 2
 
 ```@contents
 Pages = [
-    "events.md",
-    "km.md",
-    "na.md",
-    "cox.md",
 ]
 Depth = 1
 ```
