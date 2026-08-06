@@ -190,7 +190,7 @@ end
     test_survival_curve(SmMC) # Test survival curve
     @test maximum( abs.(S0.-SmMC) ) < 0.01 # consistency test with threshold
     @test maximum(abs.(Sm .- SmMC)) < 0.001 # Monte-Carlo and analytic implementations test
-    _, Smed, _ = posterior_credible_band(0.05,3000,t,model,false) # NTR posterior median with Monte-Carlo computation
+    _, Smed, _ = posterior_credible_band(0.05,3000,t,model;μ=false) # NTR posterior median with Monte-Carlo computation
     test_survival_curve(Smed) # Test survival curve
     @test maximum( abs.(S0.-Smed) ) < 0.01 # consistency test with threshold
     # BvM tests for the NTR model without covariates
@@ -257,9 +257,9 @@ end
     @test maximum( abs.(S0_regre_0.-Sm_regre_MC_0) ) < 0.055 # consistency test with threshold
     @test maximum( abs.(S0_regre_1.-Sm_regre_MC_1) ) < 0.055 # consistency test with threshold
     @test maximum( abs.(S0_regre_2.-Sm_regre_MC_2) ) < 0.055 # consistency test with threshold
-    _, Smed_regre_0, _ = posterior_credible_band(0.05,3000,t,z_0,modelregre,false) # Cox NTR posterior median with Monte-Carlo computation
-    _, Smed_regre_1, _ = posterior_credible_band(0.05,3000,t,z_1,modelregre,false) # Cox NTR posterior median with Monte-Carlo computation
-    _, Smed_regre_2, _ = posterior_credible_band(0.05,3000,t,z_2,modelregre,false) # Cox NTR posterior median with Monte-Carlo computation
+    _, Smed_regre_0, _ = posterior_credible_band(0.05,3000,t,z_0,modelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
+    _, Smed_regre_1, _ = posterior_credible_band(0.05,3000,t,z_1,modelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
+    _, Smed_regre_2, _ = posterior_credible_band(0.05,3000,t,z_2,modelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
     test_survival_curve(Smed_regre_0) # Test survival curve
     test_survival_curve(Smed_regre_1) # Test survival curve
     test_survival_curve(Smed_regre_2) # Test survival curve
