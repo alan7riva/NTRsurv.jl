@@ -11,7 +11,7 @@ makedocs(
         edit_link = "main"
     ),
     pages = [
-        "Home" => "home.md",
+        "Home" => "index.md",
         #"Getting Started" => "getting_started.md",
         #"Event Times" => "events.md",
         #"Kaplan-Meier" => "km.md",
