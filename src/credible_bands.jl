@@ -40,7 +40,7 @@ median survival, alternative `μ=false`, from NTR models with variance modulatin
 """
 function prior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, α::Float64, baseline::Baseline; μ::Bool=true)
     S = sample_prior_survival(l,t,α,baseline)
-    return credible_band( p, S, μ)
+    return credible_band( p, S; μ)
 end
 
 """
