@@ -137,39 +137,42 @@ savefig(ntr_plot, "rossi_ntr_fit.svg"); nothing # hide
 
 ## Plug-in Cox-NTR regression
 
-A practical Cox-NTR workflow plugs-in an estimates for the regression coefficients, either 
-from a MCMC sampler of the posterior dstribution or using the frequentist estimator are good 
-alternatives.
+A practical Cox-NTR workflow first obtains a point estimate of the regression
+coefficients and then conditions the Cox-NTR posterior computations on that
+estimate. For example, either estimates from an MCMC sampler of the posterior 
+dstribution or using the frequentist estimator are good alternatives.
 
-```julia
-z_keys = [:fin, :age, :race, :wexp, :mar, :paro, :prio]
-Z = [ [ rossi[j,i] for i in z_keys] for j in 1:nrow(rossi)]
+```@repl rossi
+rossi.event = Survival.EventTime.(rossi.week, rossi.arrest .== 1);
 
-dataregre = RegressionSurvivalData(T, δ, Z)
+cox_fit = Survival.coxph(
+    @formula(event ~ fin + age + race + wexp + mar + paro + prio),
+    rossi
+);
+c_freq = coef(cox_fit);
+z_keys = [:fin, :age, :race, :wexp, :mar, :paro, :prio];
+Z = [ [Float64(rossi[j, key]) for key in z_keys] for j in 1:nrow(rossi) ];
+dataregre = RegressionSurvivalData(T, δ, Z);
 # Compilation runs
 NTRsurv.loglikelihood([0.3,0.1,-0.3,0.3,0.1,-0.3,-0.1],α,baseline,dataregre) # In this notebbok loglikelihood funcion is also loaded by Survival so it has to be sepcified.
 robbins_monro_mh_within_gibbs_tune(3,3,x->NTRsurv.loglikelihood(x,α,baseline,dataregre),zeros(7),0.1.*ones(7),0.4.*ones(7),0.7)
-
 # Robbins-Monro algorithm for variance of proposal distribution tuning
 sd_prop_tuned, s₀_tune, lliks₀_tune = robbins_monro_mh_within_gibbs_tune(150,100,x->NTRsurv.loglikelihood(x,α,baseline,dataregre),zeros(7),0.1.*ones(7),0.4.*ones(7),0.7)
-
 # Metropolis-Hastings within Gibbs chain run
 chain_s, _ =  random_walk_mh_within_gibbs( 3000, x-> NTRsurv.loglikelihood(x,α,baseline,dataregre), s₀_tune, lliks₀_tune, sd_prop_tuned[end])
-
 # Posterior mean estimate of regression coefficients for plug-in NTR-Cox model
 c_post = mean(chain_s)
-
 # Plug-in Cox-NTR model (posterior mean)
 cox_model = CoxNeutralToTheRightModel( c_post, α, baseline, dataregre)
-
-# Median covariate vectors for fit illustration
-z_1 = [ 0.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0 ]
-z_2 = [ 1.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0 ]
-z_v = [z_1,z_2]
-
-# NTR posterior credible bands computation
-NTR_bands = posterior_credible_band(0.05,3000,t, z_v, cox_model);
+z_1 = [0.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0];
+z_2 = [1.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0];
+z_v = [z_1, z_2];
+NTR_bands = posterior_credible_band( 0.05, 3000, t, z_v, cox_model);
 ```
+
+We can see that the frequentist Cox partial likelihood estimator is quite similar
+to the one corresponding to the Bayesian NTR workflow.
+
 
 ```@example rossi
 # Plot for financial aid vs no fiancial aid median survival curves
