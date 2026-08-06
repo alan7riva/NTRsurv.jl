@@ -425,14 +425,21 @@ function cox_partial_loglik(c::Union{Real,AbstractVector{<:Real}}, D::Regression
     end
 end
 
-function boot_chaz( df::DataFrame, z_keys::Vector{Symbol})
+function boot_chaz( df::DataFrame, z_keys::Vector{Symbol}; max_tries::Int64 = 100)
     n = nrow(df)
-    inds = rand(1:n,n)
-    df_boot = df[inds,:]
-    freq_cox_model_boot = Survival.coxph( Term(:event) ~ sum(Term.(z_keys)) , df_boot; tol=1e-8)
-    c_boot = coef(freq_cox_model_boot)
-    H_boot, T_boot = BreslowEstimCoxModel_with_time( freq_cox_model_boot)
-    return T_boot, H_boot, c_boot
+    for _ in 1:max_tries
+        inds = rand(1:n, n)
+        df_boot = df[inds,:]
+        try
+            freq_cox_model_boot = Survival.coxph( Term(:event) ~ sum(Term.(z_keys)), df_boot; tol = 1e-6)
+            c_boot = coef(freq_cox_model_boot)
+            H_boot, T_boot = BreslowEstimCoxModel_with_time(freq_cox_model_boot)
+            return T_boot, H_boot, c_boot
+        catch err
+            continue
+        end
+    end
+    error( "Cox fitting failed in $max_tries consecutive bootstrap samples.")
 end
 
 function bootstrap_survival(l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
