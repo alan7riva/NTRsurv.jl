@@ -13,10 +13,10 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
-        #"Getting Started" => "getting_started.md",
-        #"Event Times" => "events.md",
-        #"Kaplan-Meier" => "km.md",
-        #"Nelson-Aalen" => "na.md",
-        #"Cox" => "cox.md",
     ],
+)
+
+deploydocs(
+    repo = "github.com/alan7riva/NTRsurv.jl.git",
+    devbranch = "main",
 )
