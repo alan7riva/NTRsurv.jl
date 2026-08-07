@@ -12,8 +12,8 @@ This package provides a Bayesian nonparametric workflow for survival analysis us
 The package is currently available on GitHub and can be installed using Julia’s package manager:
 
 ```julia
-using Pkg
-Pkg.add(url="https://github.com/alan7riva/NTRsurv.jl.git")
+julia> using Pkg
+julia> Pkg.add(url="https://github.com/alan7riva/NTRsurv.jl.git")
 ```
 
 ## Quick start: the Rossi recidivism data
@@ -43,12 +43,9 @@ T = Float64.(Rossi.week)
 
 t = collect(range(0.0, maximum(T), length = 100));
 
-Rossi.event = Survival.EventTime.(Rossi.week, Rossi.arrest .== 1);
-Cox_fit = Survival.coxph(
-    @formula(event ~ fin + age + race + wexp + mar + paro + prio),
-    Rossi
-);
-c_freq = coef(Cox_fit);
+z_1 = [ 0.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0 ]
+z_2 = [ 1.0, 23.0, 1.0, 1.0, 0.0, 1.0, 2.0 ]
+z_v = [z_1,z_2]
 ```
 
 The sample size, number of observed events, and number of right-censored
@@ -89,7 +86,7 @@ middle curve is the Monte Carlo posterior mean by default, when argument `μ` is
 or the Monte Carlo posterior median when `μ = false`.
 
 For comparison, we also compute the Kaplan--Meier estimator using
-`Survival.jl` (https://juliastats.org/Survival.jl/latest/).
+[`Survival.jl`](https://juliastats.org/Survival.jl/latest/).
 
 ```@repl rossi
 km = fit(Survival.KaplanMeier, T, δ);
@@ -97,11 +94,10 @@ NTR_baseline = exp.(-baseline.κ.(t));
 ```
 
 
-```@example rossi
+```@repl rossi
 NTR_plot = plot( t, band_center, ribbon = ( band_center .- band_lower, band_upper .- band_center), fillalpha = 0.25, linewidth = 2.2, xlabel = "Time (weeks)", ylabel = "Survival", ylims = (0.0, 1.0), label = "NTR posterior mean with 95% credible band", title = "NTR survival analysis of the Rossi data", size = (720, 430))
 plot!( NTR_plot, km.events.time, km.survival, seriestype = :steppost, linewidth = 2, linestyle = :dash, label = "Kaplan--Meier estimator")
 plot!( NTR_plot, t, NTR_baseline, linewidth = 2, linestyle = :dot, label = "Prior mean survival (baseline)")
-
 savefig(NTR_plot, "rossi_ntr_fit.svg"); nothing # hide
 ```
 
@@ -133,9 +129,9 @@ robbins_monro_mh_within_gibbs_tune(3,3,x->NTRsurv.loglikelihood(x,α,baseline,da
 
 ```@repl rossi
 # Robbins-Monro algorithm for variance of proposal distribution tuning
-sd_prop_tuned, s₀_tune, lliks₀_tune = robbins_monro_mh_within_gibbs_tune(150,100,x->NTRsurv.loglikelihood(x,α,baseline,dataregre),zeros(7),0.1.*ones(7),0.4.*ones(7),0.7;show_progress=false)
+sd_prop_tuned, s₀_tune, lliks₀_tune = robbins_monro_mh_within_gibbs_tune(150,100,x->NTRsurv.loglikelihood(x,α,baseline,dataregre),zeros(7),0.1.*ones(7),0.4.*ones(7),0.7;show_progress=false);
 # Metropolis-Hastings within Gibbs chain run
-chain_s, _ =  random_walk_mh_within_gibbs( 3000, x-> NTRsurv.loglikelihood(x,α,baseline,dataregre), s₀_tune, lliks₀_tune, sd_prop_tuned[end])
+chain_s, _ =  random_walk_mh_within_gibbs( 3000, x-> NTRsurv.loglikelihood(x,α,baseline,dataregre), s₀_tune, lliks₀_tune, sd_prop_tuned[end]);
 # Posterior mean estimate of regression coefficients for plug-in NTR-Cox model
 c_post = mean(chain_s)
 ```
@@ -154,11 +150,11 @@ corresponding to the median population with (`z_1[1]=1.0`) and without (`z_1[1]=
 covariate vectors are contained in `z_v = [z_1, z_2]`.
 
 ```@repl rossi
-NTR_Cox_model = CoxNeutralToTheRightModel( c_post, α, baseline, dataregre)
+NTR_Cox_model = CoxNeutralToTheRightModel( c_post, α, baseline, dataregre);
 NTR_Cox_bands = posterior_credible_band( 0.05, 3000, t, z_v, NTR_Cox_model);
 # Plot for financial aid vs no fiancial aid median survival curves
 NTR_Cox_plot =  plot( t, NTR_Cox_bands[1][2],  ribbon = ( NTR_Cox_bands[1][2] .- NTR_Cox_bands[1][1], NTR_Cox_bands[1][3] .- NTR_Cox_bands[1][2]), c=4, xlabel="\$t\$", ylabel="\$S(t)\$", fillalpha=0.3, label="No financial aid." , title="Median survival curves")
-plot!( t, NTR_Cox_bands[2][2],  ribbon = ( NTR_Cox_bands[2][2] .- NTR_Cox_bands[2][1], NTR_Cox_bands[2][3] .- NTR_Cox_bands[2][2]), c=5, fillalpha=0.3,  label="Financial aid",legend=:outerright, size=(1200,400))
+plot!( t, NTR_Cox_bands[2][2],  ribbon = ( NTR_Cox_bands[2][2] .- NTR_Cox_bands[2][1], NTR_Cox_bands[2][3] .- NTR_Cox_bands[2][2]), c=5, fillalpha=0.3,  label="Financial aid", size = (720, 430))
 savefig(NTR_Cox_plot, "rossi_cox_ntr_fit.svg"); nothing # hide
 ```
 

@@ -7,7 +7,7 @@ makedocs(
     sitename = "NTRsurv.jl",
     authors = "Alan Riva-Palacio",
     format = Documenter.HTML(
-        prettyurls = get(ENV, "CI", "false") == "true",
+        prettyurls = true,
         canonical = "https://alan7riva.github.io/NTRsurv.jl/stable/",
         edit_link = "main"
     ),
