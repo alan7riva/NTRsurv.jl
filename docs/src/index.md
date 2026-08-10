@@ -13,7 +13,7 @@ The package is currently available on GitHub and can be installed using Julia’
 
 ```julia
 julia> using Pkg
-julia> Pkg.add(url="https://github.com/alan7riva/NTRsurv.jl.git")
+julia> Pkg.add("NTRsurv")
 ```
 
 ## Quick start: the Rossi recidivism data
