@@ -10,6 +10,7 @@ It provides tools for:
 - Posterior mean estimation of survival function.
 - Posterior simulation of survival functions.
 - Credible bands for survival curves.
+- Cox regression type modeling.
 
 ## Installation
 
@@ -27,10 +28,10 @@ It provides tools for:
 The [`examples/`](examples/) directory contains simulation studies and
 real-data analyses illustrating:
 
-- Weibull simulation study containing theoretical details of the model;
-- prior calibrations for small samples;
-- Cox-NTR regression with uncertainty quantification focus;
-- Meta-analysis example.
+- [Weibull simulation study containing theoretical details of the model](https://nbviewer.org/github/alan7riva/NTRsurv.jl/blob/main/examples/Weibull_simulation_study.ipynb);
+- [prior calibrations for small samples](https://nbviewer.org/github/alan7riva/NTRsurv.jl/blob/main/examples/small_sample_analysis.ipynb);
+- [Cox-NTR regression with uncertainty quantification focus](https://nbviewer.org/github/alan7riva/NTRsurv.jl/blob/main/examples/Cox_NTR_UQ.ipynb);
+- [Meta-analysis example](https://nbviewer.org/github/alan7riva/NTRsurv.jl/blob/main/examples/meta_analysis.ipynb).
 
 ## License
 
