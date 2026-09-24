@@ -2,11 +2,12 @@
 
 module NTRsurv
 
-using Distributions, ProgressMeter
-import Statistics: median
+using Distributions, ProgressMeter, StatsAPI, StatsBase
+import Statistics: median, std
 import SpecialFunctions: gamma
 import IterTools: subsets
 import Base: Tuple
+import Plots: plot, plot!, Plot
 ProgressMeter.ijulia_behavior(:append)
 
 
@@ -14,6 +15,7 @@ include("NTRsurvPrior.jl")
 include("CoxNTRsurvPrior.jl")
 include("AdaptiveMH.jl")
 include("credible_bands.jl")
+include("model_interface.jl")
 
 export
     Baseline,
@@ -22,7 +24,7 @@ export
     ExponentialBaseline,
     EmpiricalBayesBaseline,
     NeutralToTheRightModel,
-    CoxNeutralToTheRightFullyBayesianModel,
+    PluginCoxNeutralToTheRightModel,
     CoxNeutralToTheRightModel,
     WeibullBaseline,
     acceptance_rate,
@@ -35,6 +37,8 @@ export
     random_walk_mh_within_gibbs,
     robbins_monro_mh_tune,
     robbins_monro_mh_within_gibbs_tune,
+    RestrictedMeanSurvivalTime,
+    RestrictedMeanSurvivalTimeContrast,
     sample_prior_survival,
     sample_posterior_survival
 end

@@ -48,6 +48,19 @@ function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},Skm::Vector{Float64},U::
     return S_mat
 end
 
+function freq_confidence_band( p::Float64, l::Int64, t::Vector{Float64}, data::SurvivalData,
+    model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    n = length(dataregre.Z)
+    c_freq = coef(model)
+    gv = [exp(dot(c_freq, z)) for z in zv]
+    Hfreq = BreslowEstimCoxModel(model);
+    fisherI_obs, V_obs, U_obs  = cox_var_obs(t,c_freq,dataregre)
+    fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
+    Hv = step_eval(dataregre.T, Hfreq, t; left = 0.0)
+    Sfreqdraws = Sfreq_mat(l, n, t, Hv, gv, zv, fU_obs, V_obs, fisherI_obs)
+    return [ credible_band(t,p, Sfreqdraws[j]; s="Frequentist") for j in eachindex(zv) ]
+end
+
 # Breslow estimator for cumulative hazard in frequentist Cox models, with times as output
 function BreslowEstimCoxModel_with_time(model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     event = model.mf.data.event
@@ -84,6 +97,7 @@ end
 function trapz(x::AbstractVector, y::AbstractVector)
     return sum( 0.5 .* (y[1:end-1] .+ y[2:end]) .* diff(x) )
 end
+
 # Auxilliary function for numerical integration with trapezoidal rule with cumulative output
 function cumtrapz(x::AbstractVector, y::AbstractVector)
     out = zeros(length(x))
@@ -325,7 +339,7 @@ function Sfreq_mat(l::Int64,n::Int64,t::Vector{Float64},κbr::Vector{Float64},g:
 end
 
 function freq_asymptotic_draws( l::Int64, t::Vector{Float64}, z::Vector{Float64}, 
-    model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    dataregre::RegressionSurvivalData,model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     n = length(dataregre.Z)
     c_freq = coef(model)
     g = exp(dot(c_freq, z))
@@ -365,7 +379,7 @@ function Sfreq_mat( l::Int64, n::Int64, t::Vector{Float64}, κbr::Vector{Float64
 end
 
 function freq_asymptotic_draws( l::Int64, t::Vector{Float64}, zv::Vector{Vector{Float64}}, 
-    model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
+    dataregre::RegressionSurvivalData,model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}})
     n = length(dataregre.Z)
     c_freq = coef(model)
     gv = [exp(dot(c_freq, z)) for z in zv]
@@ -387,7 +401,19 @@ function freq_confidence_bands( p::Float64, l::Int64, t::Vector{Float64}, zv::Ve
     fU_obs(v) = step_eval(t, U_obs, v; left = 0.0)
     Hv = step_eval(dataregre.T, Hfreq, t; left = 0.0)
     Sfreqdraws = Sfreq_mat(l, n, t, Hv, gv, zv, fU_obs, V_obs, fisherI_obs)
-    return [ credible_band(p, Sfreqdraws[j]) for j in eachindex(zv) ]
+    return [ credible_band(t,p, Sfreqdraws[j]; s="Frequentist") for j in eachindex(zv) ]
+end
+
+function frequentist_rmst( l::Int64, t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, 
+    dataregre::RegressionSurvivalData,model::StatsModels.TableRegressionModel{CoxModel{Float64}, Matrix{Float64}},  p::Float64=0.05)
+    s = "Frequentist"
+    τ = t[end]
+    l_t = length(t) 
+    Sfreqdraws = freq_asymptotic_draws( l, t, [z₁,z₂], dataregre, model)
+    v = NTRsurv.rmst_comp(t, Sfreqdraws[2] .- Sfreqdraws[1])
+    μ = mean(v)
+    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,p,cr_I)
 end
 
 # Cox partial likelihood
@@ -467,11 +493,22 @@ end
 
 function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_new::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol})
     S_boot =  bootstrap_survival( l, t, z_new, df, z_keys)
-    return credible_band( p, S_boot)
+    return credible_band( t, p, S_boot; s="Frequentist bootstrap")
 end
 
 function bootstrap_confidence_band( p::Float64, l::Int64,t::Vector{Float64}, z_news::Vector{Vector{Float64}}, df::DataFrame, z_keys::Vector{Symbol})
     S_boots =  bootstrap_survival( l, t, z_news, df, z_keys)
-    return  [ credible_band(p, S_boots[j]) for j in eachindex(z_news) ]
+    return  [ credible_band(t,p, S_boots[j]; s="Frequentist bootstrap") for j in eachindex(z_news) ]
+end
+
+function bootstrap_rmst( l::Int64, t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, df::DataFrame, z_keys::Vector{Symbol},  p::Float64=0.05)
+    s = "Frequentist bootstrap"
+    τ = t[end]
+    l_t = length(t) 
+    S_boots =  bootstrap_survival( l, t, [z₁,z₂], df, z_keys)
+    v = NTRsurv.rmst_comp(t, S_boots[2] .- S_boots[1])
+    μ = mean(v)
+    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,p,cr_I)
 end
 

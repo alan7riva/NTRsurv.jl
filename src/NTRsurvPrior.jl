@@ -47,6 +47,7 @@ The type has the following fields:
 
 - `T`: Sorted unique observation times.
 - `δ`: Exact observation indicator, 1 if at least one exact observation corresponds and 0 otherwise, in `T`.
+- `m`: Number of observations. 
 - `n`: Number of unique observations.
 - `nᵉ`: Number of multiplicities for exact observations in `T``.
 - `nᶜ`: Number of multiplicities for exact observations in `T``.
@@ -131,16 +132,17 @@ Missing fields are set to zero and must be supplied if required for likelihood e
 struct Baseline
     κ::Function 
     dκ::Function
-    κinv::Function
+    s::String
 end
 
 function Baseline(κ::Function)
-    return Baseline(κ,zero,zero)
+    return Baseline(κ,zero,"")
 end
 
 function Baseline(κ::Function,dκ::Function)
-    return Baseline(κ,dκ,zero)
+    return Baseline(κ,dκ,"")
 end
+
 
 """
     ExponentialBaseline(λ::Float64)
@@ -150,7 +152,7 @@ hazard with rate parameter `λ`.
 """
 function ExponentialBaseline(λ::Float64=1.0)
     r = λ[1]
-    return Baseline(z->r*z,z->r,z->z/r)
+    return Baseline(z->r*z,z->r,"ExponentialBaseline(rate=$(_format_number(r)))")
 end
 
 """
@@ -160,7 +162,7 @@ Construct `Baseline` object corresponding to a Weibull baseline
 hazard with shape parameter `k` and scale parameter `λ`.
 """
 function WeibullBaseline(k::Float64,λ::Float64)
-    return Baseline(z->(z/λ)^k,z->k*z^(k-1)/λ^k,z->(λ*z)^(1/k))
+    return Baseline(z->(z/λ)^k,z->k*z^(k-1)/λ^k,"WeibullBaseline(shape=$(_format_number(k)),scale=$(_format_number(λ)))")
 end
 
 """
@@ -171,7 +173,8 @@ hazard with rate which either matches the mean of all
 observations, default choice with `exact=false`, or only of the exact observations, chosen with`exact=true`.
 """
 function EmpiricalBayesBaseline(data::SurvivalData)
-    return ExponentialBaseline( sum(data.nᵉ) / sum((data.nᵉ .+ data.nᶜ) .* data.T) )
+    r = sum(data.nᵉ) / sum((data.nᵉ .+ data.nᶜ) .* data.T)
+    return Baseline(z->r*z,z->r,"EmpiricalExponentialBaseline(rate=$(_format_number(r)))")
 end
 
 function _sample_prior_survival( t::Array{Float64}, α::Float64, β::Float64, baseline::Baseline)

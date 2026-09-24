@@ -1,17 +1,32 @@
 """
     credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
 
+Immutable type for credible bands with lower band extreme `l`, medium band values `m` and upper band extreme `u`.
+"""
+struct CredibleBand
+    t::Vector{Float64}
+    d::Vector{Float64}
+    m::Vector{Float64}
+    u::Vector{Float64}
+    s::String
+    p::Float64
+    draws::Int64
+end
+
+"""
+    credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
+
 Function for Monte-Carlo computation of (1-p)% survival credible bands and inner survival estimate, either mean survival, default `μ=true`, or 
 median survival, alternative `μ=false`, from a matrix `S` with rows provided by samples of survival curves. The output is
 a tuple consisting of the lower band envelope, the inner survival estimate, and the upper band envelope in such order.
 """
-function credible_band( p::Float64, S::Matrix{Float64}; μ::Bool=true)
+function credible_band( t::Vector{Float64}, p::Float64, S::Matrix{Float64}; s::String="mean")
     if  !( 0 < p < 1)
         @error "ERROR: p is not between zero and one."
     end 
     l,k = size(S)
     band_m = zeros(k)
-    if μ
+    if s[end-3:end] == "mean"
         band_m = vec(mean(S,dims=1))
     else
         band_m = vec(median(S,dims=1))
@@ -29,7 +44,7 @@ function credible_band( p::Float64, S::Matrix{Float64}; μ::Bool=true)
     end
     band_u = [ maximum(S_band[:,i]) for i in 1:k]
     band_d = [ minimum(S_band[:,i]) for i in 1:k]
-    return band_d, band_m, band_u
+    return CredibleBand( t, band_d, band_m, band_u, s, p, l)
 end
 
 """
@@ -40,7 +55,8 @@ median survival, alternative `μ=false`, from NTR models with variance modulatin
 """
 function prior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, α::Float64, baseline::Baseline; μ::Bool=true)
     S = sample_prior_survival(l,t,α,baseline)
-    return credible_band( p, S; μ)
+    s = μ ? "Prior mean" : "Prior median"
+    return credible_band( t, p, S; s)
 end
 
 """
@@ -55,27 +71,36 @@ as it already should containg a posterior sample of regression coefficients. Out
 """
 function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, model::NeutralToTheRightModel; μ::Bool=true)
     S = sample_posterior_survival(l,t,model)
-    return credible_band( p, S; μ)
+    s = μ ? "posterior mean" : "posterior median"
+    return credible_band( t, p, S; s)
 end
 
-function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel; μ::Bool=true)
+function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_new::Vector{Float64}, model::PluginCoxNeutralToTheRightModel; μ::Bool=true)
     S = sample_posterior_survival(l,t,z_new,model)
-    return credible_band( p, S; μ)
+    s = μ ? "posterior mean, covariate Z=$( parse.( Float64, _format_number.(z_new) ) )" : "posterior median, covariate Z=$( parse.( Float64, _format_number.(z_new) ) )"
+    s = s*", model=plug-in Bayesian"
+    return credible_band( t, p, S; s)
 end
 
 function posterior_credible_band( p::Float64, l::Int64, t::Vector{Float64}, z_news::Vector{Vector{Float64}}, 
-    model::CoxNeutralToTheRightModel; μ::Bool=true, z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    model::PluginCoxNeutralToTheRightModel; μ::Bool=true, z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    s = μ ? ["posterior mean, covariate Z=$( parse.( Float64,_format_number.(z) ) )" for z in z_news] : ["posterior median, covariate Z=$( parse.( Float64, _format_number.(z) ) )" for z in z_news]
+    s = [ v*", model=plugin Bayesian" for v in s]
     Smats = sample_posterior_survival(l,t,z_news,model;z_ref)
-    return [ credible_band(p, Smats[j]; μ) for j in eachindex(z_news) ]
+    return [ credible_band( t, p, Smats[j]; s=s[j]) for j in eachindex(z_news) ]
 end
 
-function posterior_credible_band( p::Float64, t::Vector{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel; μ::Bool=true)
+function posterior_credible_band( p::Float64, t::Vector{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel; μ::Bool=true)
     S = sample_posterior_survival(t,z_new,model)
-    return credible_band( p, S; μ)
+    s = μ ? "posterior mean" : "posterior median"
+    s = s*", model=fully Bayesian"
+    return credible_band( t, p, S; s)
 end
 
 function posterior_credible_band( p::Float64, t::Vector{Float64}, z_news::Vector{Vector{Float64}}, 
-    model::CoxNeutralToTheRightFullyBayesianModel; μ::Bool=true, z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    model::CoxNeutralToTheRightModel; μ::Bool=true, z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    s = μ ? ["posterior mean, covariate Z=$( parse.( Float64, _format_number.(z) ) )" for z in z_news] : ["posterior median, covariate Z=$( parse.( Float64, _format_number.(z) ) )" for z in z_news]
+    s = [v*", model=fully Bayesian" for v in s]
     Smats = sample_posterior_survival(t,z_news,model;z_ref)
-    return [ credible_band(p, Smats[j]; μ) for j in eachindex(z_news) ]
+    return [ credible_band( t, p, Smats[j]; s=s[j]) for j in eachindex(z_news) ]
 end

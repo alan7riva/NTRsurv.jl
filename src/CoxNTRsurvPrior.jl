@@ -15,8 +15,10 @@ struct RegressionSurvivalDataNoRep
     T::Vector{Float64} 
     δ::Vector{Int64}
     Z::Vector{Vector{Float64}} 
-    n::Int64 
+    n::Int64
+    p::Int64
     nᵉ::Vector{Int64}
+    nᶜ::Vector{Int64}
 end
 
 function RegressionSurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector{Vector{Float64}})
@@ -25,8 +27,10 @@ function RegressionSurvivalDataNoRep(T::Vector{Float64}, δ::Vector{Int64}, Z::V
     δ = δ[ sp ]
     Z = Z[ sp ]
     n = length(T)
+    p = length(Z[1])
     nᵉ = copy(δ)
-    return RegressionSurvivalDataNoRep( T, δ, Z, n, nᵉ)
+    nᶜ = 1 .- nᵉ
+    return RegressionSurvivalDataNoRep( T, δ, Z, n, p, nᵉ, nᶜ)
 end
 
 """
@@ -59,6 +63,7 @@ struct RegressionSurvivalDataRep
     Zᶜ::Vector{Vector{Vector{Float64}}}
     m::Int64
     n::Int64
+    p::Int64
     nᵉ::Vector{Int64}
     nᶜ::Vector{Int64}
 end
@@ -69,6 +74,7 @@ function RegressionSurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vec
     T = T[ sp ]
     δ = δ[ sp ]
     Z = Z[ sp ]
+    p = length(Z[1])
     Tu = unique(T)
     n = length(Tu)
     Iᵉ = [ findall( (T .== v) .&& (δ .== 1.0) ) for v in unique(T) ]
@@ -78,7 +84,7 @@ function RegressionSurvivalDataRep(T::Vector{Float64}, δ::Vector{Int64}, Z::Vec
     nᵉ = [ length(v) for v in Iᵉ ]
     nᶜ = [ length(v) for v in Iᶜ ]
     δᵉ = 1*( nᵉ .> 0 )
-    return RegressionSurvivalDataRep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, nᵉ, nᶜ)
+    return RegressionSurvivalDataRep( T, Tu, δ, δᵉ, Z, Zᵉ, Zᶜ, m, n, p, nᵉ, nᶜ)
 end
 
 """
@@ -108,11 +114,11 @@ function RegressionSurvivalData(T::Vector{Float64}, δ::Vector{Int64}, Z::Vector
     end
 end
 
-function EmpiricalBayesBaseline(data::RegressionSurvivalData;exact::Bool=true)
+function EmpiricalBayesBaseline(data::RegressionSurvivalData)
     if isa(data,RegressionSurvivalDataNoRep)
-        return EmpiricalBayesBaseline(SurvivalData(data.T,data.δ);exact=exact)
+        return EmpiricalBayesBaseline(SurvivalData(data.T,data.δ))
     else
-        return EmpiricalBayesBaseline(SurvivalData(data.Tr,data.δr);exact=exact)
+        return EmpiricalBayesBaseline(SurvivalData(data.Tr,data.δr))
     end
 end
 
@@ -276,7 +282,7 @@ function loglikelihood(c::AbstractVector{<:Real},α::Real,β::Real,suffstatsb::B
     return loglikelihood(c,α,β,suffstatsb,cox_rs,data)
 end
 
-struct CoxNeutralToTheRightModelNoRep
+struct PluginCoxNeutralToTheRightModelNoRep
     c::Vector{Float64}
     α::Float64 
     β::Float64
@@ -286,9 +292,10 @@ struct CoxNeutralToTheRightModelNoRep
     R₁::Vector{Float64}
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
+    custom::Bool
 end
 
-struct CoxNeutralToTheRightModelRep
+struct PluginCoxNeutralToTheRightModelRep
     c::Vector{Float64}
     α::Float64
     β::Float64
@@ -299,41 +306,65 @@ struct CoxNeutralToTheRightModelRep
     R₂::Vector{Float64}
     hᵉ::Vector{Float64}
     F::Vector{Vector{Vector{Float64}}}
+    custom::Bool
 end
 
 """
-    CoxNeutralToTheRightModel
+    PluginCoxNeutralToTheRightModel
 
 Union type representing Cox NTR models for possibly censored to the right survival data with covariates.
 
-`CoxNeutralToTheRightModel` is an alias for the union of internal structs `CoxNeutralToTheRightModelNoRep` and `CoxNeutralToTheRightModelRep`, corresponding respectively to modeling of datasets without and 
+`PluginCoxNeutralToTheRightModel` is an alias for the union of internal structs `PluginCoxNeutralToTheRightModelNoRep` and `PluginCoxNeutralToTheRightModelRep`, corresponding respectively to modeling of datasets without and 
 with repeated event times.
     
-    CoxNeutralToTheRightModel(b::Vector{Float64},α::Float64,baseline::BaselineRegreNTR,data::RegressionSurvivalData)
-    CoxNeutralToTheRightModel(α::Float64,data::DataNTR)
+    PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep) 
+    PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,data::RegressionSurvivalData)
 
-Constructor for NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
+Constructor for plug-in Cox NTR model with a priori variance modulating parameter `α`, `baseline` object specification, and survival data object `data`. 
 If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 """
-const CoxNeutralToTheRightModel = Union{CoxNeutralToTheRightModelNoRep, CoxNeutralToTheRightModelRep}
+const PluginCoxNeutralToTheRightModel = Union{PluginCoxNeutralToTheRightModelNoRep, PluginCoxNeutralToTheRightModelRep}
 
-function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataNoRep)
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataNoRep,custom::Bool)
     β = 1.0/log1p(1.0/α)
     s1, s2, s3 = Tuple(CoxSufficientStatistics(c,data,g))
-    return CoxNeutralToTheRightModelNoRep( c, α, β, baseline, g, data, s1, s2, s3)
+    return PluginCoxNeutralToTheRightModelNoRep( c, α, β, baseline, g, data, s1, s2, s3,custom)
 end
 
-function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep)
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataNoRep)
+    β = 1.0/log1p(1.0/α)
+    s1, s2, s3 = Tuple(CoxSufficientStatistics(c,data,g))
+    return PluginCoxNeutralToTheRightModelNoRep( c, α, β, baseline, g, data, s1, s2, s3, true)
+end
+
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep,custom::Bool)
     β = 1.0/log1p(1.0/α)
     s1, s2, s3, s4 = Tuple(CoxSufficientStatistics(c,data,g))
-    return CoxNeutralToTheRightModelRep( c, α, β, baseline, g, data, s1, s2, s3, s4)
+    return PluginCoxNeutralToTheRightModelRep( c, α, β, baseline, g, data, s1, s2, s3, s4,custom)
 end
 
-function CoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
-    return CoxNeutralToTheRightModel( c, α, baseline, cox_rs, data)
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalDataRep)
+    β = 1.0/log1p(1.0/α)
+    s1, s2, s3, s4 = Tuple(CoxSufficientStatistics(c,data,g))
+    return PluginCoxNeutralToTheRightModelRep( c, α, β, baseline, g, data, s1, s2, s3, s4,true)
 end
 
-function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    return PluginCoxNeutralToTheRightModel( c, α, baseline, cox_rs, data, false)
+end
+
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,data::RegressionSurvivalData)
+    baseline  = EmpiricalBayesBaseline(data)   
+    return PluginCoxNeutralToTheRightModel( c, α, baseline, data)
+end
+
+function PluginCoxNeutralToTheRightModel(c::Vector{Float64},α::Float64,g::Function,data::RegressionSurvivalDataRep)
+    baseline  = EmpiricalBayesBaseline(data) 
+    return PluginCoxNeutralToTheRightModelRep( c, α, baseline, g, data)
+end
+
+function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     α = model.α
     β = model.β
     c = model.c
@@ -343,7 +374,7 @@ function postmean_cont_incr(k::Int64,t1::Float64,t2::Float64,z_new::Vector{Float
     return -β*( κ(t2)-κ(t1) )*log1p( ν/(α+R₁[k]) )
 end
 
-function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     α = model.α
     c = model.c
     ν = model.g(model.c,z_new)
@@ -363,7 +394,7 @@ function postmean_disc_incr_rep(k::Int64,z_new::Vector{Float64},model::CoxNeutra
     return log(num) -log(den)
 end
 
-function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel) 
+function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel) 
     α = model.α
     c = model.c
     ν = model.g(model.c,z_new)
@@ -374,7 +405,7 @@ function postmean_disc_incr_norep(k::Int64,z_new::Vector{Float64},model::CoxNeut
     return log(num) -log(den)
 end
 
-function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function postmean_disc_incr(k::Int64,z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     ν = model.g(model.c,z_new) 
     return ( nᵉ[k] == 1 ) ? postmean_disc_incr_norep(k,z_new,model) : postmean_disc_incr_rep(k,z_new,model)
@@ -391,7 +422,7 @@ Function for posterior mean survival curve evaluation over a grid
 * `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 * `β`: Gamma process hyperparameter chosen for centering of NTR survival curves on baseline.
 """
-function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel)
+function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::PluginCoxNeutralToTheRightModel)
     if t[1] != 0.0
         t = [0.0;t]
     end
@@ -460,7 +491,7 @@ Function for posterior simulation of weights at fixed locations corresponding to
 - `data`: Data struct for NTR models, either type DataNTRnorep or DataNTRrep.
 - `α`: Gamma process hyperparameter impacting Variance modulation for NTR survival curves.
 """
-function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::CoxNeutralToTheRightModel)
+function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::PluginCoxNeutralToTheRightModel)
     α = model.α
     R₂ = model.R₂
     hᵉ = model.hᵉ
@@ -475,7 +506,7 @@ function post_fix_locw_GammaNTR_accrej_norep(ν::Float64,i::Int64,model::CoxNeut
     return Y
 end
 
-function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutralToTheRightModel)
+function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::PluginCoxNeutralToTheRightModel)
     α = model.α
     g = model.g
     c = model.c
@@ -496,7 +527,7 @@ function post_fix_locw_GammaNTR_accrej_rep(ν::Float64,i::Int64,model::CoxNeutra
     return Y
 end
 
-function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::CoxNeutralToTheRightModel)
+function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::PluginCoxNeutralToTheRightModel)
     α = model.α
     β = model.β
     κ = model.baseline.κ
@@ -504,7 +535,7 @@ function cont_incr(ν::Float64,k::Int64,t1::Float64,t2::Float64,model::CoxNeutra
     return rand(Gamma( β*(κ(t2) - κ(t1)), ν/(α+R₁[k])))
 end
 
-function disc_incr(ν::Float64,k::Int64,model::CoxNeutralToTheRightModel)
+function disc_incr(ν::Float64,k::Int64,model::PluginCoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     return ( nᵉ[k] == 1 ) ? post_fix_locw_GammaNTR_accrej_norep(ν,k,model) : post_fix_locw_GammaNTR_accrej_rep(ν,k,model)
 end
@@ -517,7 +548,7 @@ Function for simulation of posterior survival curves in a grid of values using t
 * `t`: Time grid where posterior mean survival is evaluated.
 * `model`: Model struct for NTR models.
 """
-function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function _sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     nᵉ = model.data.nᵉ
     τ = model.data.T
     ν = model.g(model.c,z_new) 
@@ -580,7 +611,7 @@ end
 
 Function for simulation of posterior survival curves, over a grid of positive values `t`, for NTR `model`.
 """
-function sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
@@ -588,7 +619,7 @@ function sample_posterior_survival(t::Array{Float64},z_new::Vector{Float64},mode
 end
 
 function sample_posterior_survival(t::Array{Float64},z_news::Vector{Vector{Float64}},
-    model::CoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    model::PluginCoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
     c = model.c
     g = model.g
     p = length(z_news[1])
@@ -607,7 +638,7 @@ function sample_posterior_survival(t::Array{Float64},z_news::Vector{Vector{Float
     return [ exp.((g(c, z) / g_ref) .* log_surv_ref) for z in z_news  ]
 end
 
-function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::CoxNeutralToTheRightModel)
+function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Float64},model::PluginCoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
@@ -619,7 +650,7 @@ function sample_posterior_survival(l::Int64,t::Array{Float64},z_new::Vector{Floa
 end
 
 function sample_posterior_survival( l::Int64, t::Vector{Float64}, z_news::Vector{Vector{Float64}},
-    model::CoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    model::PluginCoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
     c = model.c
     g = model.g
     p = length(z_news[1])
@@ -646,34 +677,40 @@ function sample_posterior_survival( l::Int64, t::Vector{Float64}, z_news::Vector
 end
 
 """
-    CoxNeutralToTheRightFullyBayesianModel
+    CoxNeutralToTheRightModel
 
 Immutable type for Cox NTR models in a fully Bayesian setting where regression coefficents are treated as random instead of fixed.
 
-Construction for fully Bayesian Cox NTR models is done by providing a sample of regressión coefficients inside the array `c_vec`, 
+Construction for Cox NTR models is done by providing a sample of regressión coefficients inside the array `c_vec`, 
 a priori variance modulating parameter `α`, `baseline` object specification, Cox regression function `g`, and regressiom survival 
 data object `data`. If `baseline` is not provided then `EmpBayesBaseline(data::DataNTR,)` is used.
 """
-struct CoxNeutralToTheRightFullyBayesianModel
+struct CoxNeutralToTheRightModel
     c_vec::Vector{Vector{Float64}}
     α::Float64 
     β::Float64
     baseline::Baseline
     g::Function
     data::RegressionSurvivalData
+    custom::Bool
 end
 
-function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalData)
+function CoxNeutralToTheRightModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalData,custom::Bool)
     β = 1.0/log1p(1.0/α)
-    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, g, data)
+    return CoxNeutralToTheRightModel( c, α, β, baseline, g, data, custom)
 end
 
-function CoxNeutralToTheRightFullyBayesianModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+function CoxNeutralToTheRightModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,g::Function,data::RegressionSurvivalData)
     β = 1.0/log1p(1.0/α)
-    return CoxNeutralToTheRightFullyBayesianModel( c, α, β, baseline, cox_rs, data)
+    return CoxNeutralToTheRightModel( c, α, β, baseline, g, data, true)
 end
 
-function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
+function CoxNeutralToTheRightModel(c::Vector{Vector{Float64}},α::Float64,baseline::Baseline,data::RegressionSurvivalData)
+    β = 1.0/log1p(1.0/α)
+    return CoxNeutralToTheRightModel( c, α, β, baseline, cox_rs, data, false)
+end
+
+function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel)
     m = length(model.c_vec)
     if !iszero(t[1])
         t = [0.0;t]
@@ -681,13 +718,13 @@ function mean_posterior_survival(t::Array{Float64}, z_new::Vector{Float64}, mode
     S_mat = Matrix{eltype(t)}(undef, m, length(t))
     for i in 1:m
         c_tmp = model.c_vec[i]
-        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
+        Cox_model = PluginCoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
         S_mat[i,:] = mean_posterior_survival(t, z_new, Cox_model)
     end
     return vec(mean( S_mat, dims=1))
 end
 
-function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightFullyBayesianModel)
+function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, model::CoxNeutralToTheRightModel)
     if !iszero(t[1])
         t = [0.0;t]
     end
@@ -695,14 +732,14 @@ function sample_posterior_survival( t::Array{Float64}, z_new::Vector{Float64}, m
     S_mat = Matrix{eltype(t)}(undef, m, length(t))
     for i in 1:m
         c_tmp = model.c_vec[i]
-        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
+        Cox_model = PluginCoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, model.g, model.data)
         S_mat[i,:] = _sample_posterior_survival(t,z_new,Cox_model)
     end
     return S_mat
 end
 
 function sample_posterior_survival( t::Array{Float64}, z_news::Vector{Vector{Float64}}, 
-    model::CoxNeutralToTheRightFullyBayesianModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
+    model::CoxNeutralToTheRightModel; z_ref::Union{Nothing,Vector{Float64}} = nothing)
     p = length(z_news[1])
     if z_ref === nothing
         z_ref = zeros(Float64, p)
@@ -718,7 +755,7 @@ function sample_posterior_survival( t::Array{Float64}, z_news::Vector{Vector{Flo
     S_mats = [ Matrix{Float64}(undef, l, length(t)) for _ in eachindex(z_news) ]
     for i in 1:l
         c_tmp = model.c_vec[i]
-        Cox_model = CoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, g, model.data)
+        Cox_model = PluginCoxNeutralToTheRightModel( c_tmp, model.α, model.baseline, g, model.data)
         g_ref = g(c_tmp, z_ref)
         powers = [ g(c_tmp, z)/g_ref for z in z_news]
         surv_ref = _sample_posterior_survival(t, z_ref, Cox_model)
