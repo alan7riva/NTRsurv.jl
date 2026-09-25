@@ -252,9 +252,11 @@ function rmst_comp(t::Vector{Float64}, S::Matrix{Float64})
 end
 
 """
-    rmst
+    RestrictedMeanSurvivalTime
 
-Struct for `restricted mean survival time` sample.
+Struct for `restricted mean survival time` sample where `τ` is the restriction time, `z` is the covariates mean survival ,`grid` 
+is the underlpying time grid for simulation, `l_grid` is the length of the `grid`, `v` is a vector container for the sample of 
+restricted means, `μ` is the mean of `v`, `p` is a redibility level and `cr_I` is the corresponding credibility interval for `v`.
 """
 struct RestrictedMeanSurvivalTime
     s::String
@@ -350,6 +352,13 @@ function Base.show( io::IO, ::MIME"text/plain", rmst::RestrictedMeanSurvivalTime
     _show_field( io, "Level", "$( 100*(1-rmst.p) )%")
 end
 
+"""
+    RestrictedMeanSurvivalTimeContrast
+
+Struct for `restricted mean survival time contrast` sample where `τ` is the restriction time, `z₁` and `z₂` are the covariates for the constrast
+related to μ(z₂) - μ(z₁), `grid` is the underlpying time grid for simulation, `l_grid` is the length of the `grid`, `v` is a vector container 
+for the sample of contrasts, `μ` is the mean of `v`, `p` is a redibility level and `cr_I` is the corresponding credibility interval for `v`.
+"""
 struct RestrictedMeanSurvivalTimeContrast
     s::String
     τ::Float64

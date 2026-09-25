@@ -1,7 +1,9 @@
 """
-    credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
+    CredibleBand
 
-Immutable type for credible bands with lower band extreme `l`, medium band values `m` and upper band extreme `u`.
+Immutable type for credible bands with lower band extreme `d`, medium band values `m`, upper band extreme `u` where `t` is the 
+    evaluation grid for the band components,  `p` is the level for the credibility, `draws` is the numer of Monte-Carlo samples
+    for the approximation and `s` is a string describing the the medium band values estimator. 
 """
 struct CredibleBand
     t::Vector{Float64}
@@ -14,11 +16,11 @@ struct CredibleBand
 end
 
 """
-    credible_band( p::Float64, S::Matrix{Float64}, μ::Bool=true)
+    credible_band( t::Vector{Float64}, p::Float64, S::Matrix{Float64}; s::String="mean")
 
 Function for Monte-Carlo computation of (1-p)% survival credible bands and inner survival estimate, either mean survival, default `μ=true`, or 
 median survival, alternative `μ=false`, from a matrix `S` with rows provided by samples of survival curves. The output is
-a tuple consisting of the lower band envelope, the inner survival estimate, and the upper band envelope in such order.
+a CredibleBand struct.
 """
 function credible_band( t::Vector{Float64}, p::Float64, S::Matrix{Float64}; s::String="mean")
     if  !( 0 < p < 1)

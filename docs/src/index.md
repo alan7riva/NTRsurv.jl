@@ -77,7 +77,7 @@ from posterior survival draws; both are evaluated on a time mesh `t`.
 
 ```@repl rossi
 posterior_mean = mean_posterior_survival(t, model);
-band_lower, band_center, band_upper = posterior_credible_band(0.05, 3000, t, model; μ=false);
+band = posterior_credible_band(0.05, 3000, t, model; μ=false);
 ```
 
 The argument `p = 0.05`, for the credble band, discards five percent of the `l=3000` sampled paths in the
@@ -95,7 +95,7 @@ NTR_baseline = exp.(-baseline.κ.(t));
 
 
 ```@repl rossi
-NTR_plot = plot( t, band_center, ribbon = ( band_center .- band_lower, band_upper .- band_center), fillalpha = 0.25, linewidth = 2.2, xlabel = "Time (weeks)", ylabel = "Survival", ylims = (0.0, 1.0), label = "NTR posterior mean with 95% credible band", title = "NTR survival analysis of the Rossi data", size = (720, 430))
+NTR_plot = plot( band, fillalpha = 0.25, linewidth = 2.2, xlabel = "Time (weeks)", ylabel = "Survival", ylims = (0.0, 1.0), label = "NTR posterior mean with 95% credible band", title = "NTR survival analysis of the Rossi data", size = (720, 430))
 plot!( NTR_plot, km.events.time, km.survival, seriestype = :steppost, linewidth = 2, linestyle = :dash, label = "Kaplan--Meier estimator")
 plot!( NTR_plot, t, NTR_baseline, linewidth = 2, linestyle = :dot, label = "Prior mean survival (baseline)")
 savefig(NTR_plot, "rossi_ntr_fit.svg"); nothing # hide
@@ -150,11 +150,11 @@ corresponding to the median population with (`z_1[1]=1.0`) and without (`z_1[1]=
 covariate vectors are contained in `z_v = [z_1, z_2]`.
 
 ```@repl rossi
-NTR_Cox_model = CoxNeutralToTheRightModel( c_post, α, baseline, dataregre);
+NTR_Cox_model = PluginCoxNeutralToTheRightModel( c_post, α, baseline, dataregre);
 NTR_Cox_bands = posterior_credible_band( 0.05, 3000, t, z_v, NTR_Cox_model);
 # Plot for financial aid vs no fiancial aid median survival curves
-NTR_Cox_plot =  plot( t, NTR_Cox_bands[1][2],  ribbon = ( NTR_Cox_bands[1][2] .- NTR_Cox_bands[1][1], NTR_Cox_bands[1][3] .- NTR_Cox_bands[1][2]), c=4, xlabel="\$t\$", ylabel="\$S(t)\$", fillalpha=0.3, label="No financial aid." , title="Median survival curves")
-plot!( t, NTR_Cox_bands[2][2],  ribbon = ( NTR_Cox_bands[2][2] .- NTR_Cox_bands[2][1], NTR_Cox_bands[2][3] .- NTR_Cox_bands[2][2]), c=5, fillalpha=0.3,  label="Financial aid", size = (720, 430))
+NTR_Cox_plot =  plot( NTR_Cox_bands[1], c=4, xlabel="\$t\$", ylabel="\$S(t)\$", fillalpha=0.3, label="No financial aid." , title="Median survival curves")
+plot!( NTR_Cox_bands[2], c=5, fillalpha=0.3,  label="Financial aid", size = (720, 430))
 savefig(NTR_Cox_plot, "rossi_cox_ntr_fit.svg"); nothing # hide
 ```
 
@@ -176,8 +176,8 @@ EmpiricalBayesBaseline
 
 ```@docs
 NeutralToTheRightModel
+PluginCoxNeutralToTheRightModel
 CoxNeutralToTheRightModel
- CoxNeutralToTheRightFullyBayesianModel
 ```
 
 ### Posterior summaries and simulation
@@ -185,9 +185,12 @@ CoxNeutralToTheRightModel
 mean_posterior_survival
 sample_prior_survival
 sample_posterior_survival
+CredibleBand
 credible_band
 prior_credible_band
 posterior_credible_band
+RestrictedMeanSurvivalTime
+RestrictedMeanSurvivalTimeContrast
 ```
 
 ### Likelihood and MCMC utilities
