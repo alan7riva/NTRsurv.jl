@@ -38,7 +38,7 @@ end
     t =  collect(LinRange(0.0,maximum(T)+1,100)) # evaluation grid
     test_survival_curve(mean_posterior_survival(t, model))
     test_survival_curve(sample_posterior_survival(t, model))    
-    NTR_band = posterior_credible_band(0.05,100,t,model) # posterior band computation
+    NTR_band = posterior_credible_band(t,model;ndraws=100) # posterior band computation
     test_band_bounds(NTR_band.d, NTR_band.u)
     test_survival_curve(NTR_band.m)
     Trep = [ T[1:30]; T[1:30]; T[1:30]]
@@ -48,33 +48,33 @@ end
     modelrep = NeutralToTheRightModel( 5.0, b, datarep)
     test_survival_curve(mean_posterior_survival(t, modelrep))
     test_survival_curve(sample_posterior_survival(t, modelrep))    
-    NTR_band_rep = posterior_credible_band(0.05,100,t,modelrep) # posterior band computation
+    NTR_band_rep = posterior_credible_band(t,modelrep;ndraws=100) # posterior band computation
     test_band_bounds(NTR_band_rep.d, NTR_band_rep.u)
     test_survival_curve(NTR_band_rep.m)
     Z = [[randn()] for _ in 1:90]
     datareg = RegressionSurvivalData(T, δ, Z)
     plugin_cox_model = PluginCoxNeutralToTheRightModel([0.5], 5.0, ExponentialBaseline(1.0), datareg)
-    test_survival_curve(mean_posterior_survival(t, [0.2], plugin_cox_model))
-    test_survival_curve(sample_posterior_survival(t, [0.2], plugin_cox_model))
-    plugin_NTR_band_cox = posterior_credible_band(0.05,100,t,[0.2],plugin_cox_model) # posterior band computation
+    test_survival_curve(mean_posterior_survival(t,[0.2], plugin_cox_model))
+    test_survival_curve(sample_posterior_survival(t,[0.2], plugin_cox_model))
+    plugin_NTR_band_cox = posterior_credible_band(t,[0.2],plugin_cox_model;ndraws=100) # posterior band computation
     test_band_bounds(plugin_NTR_band_cox.d, plugin_NTR_band_cox.u)
     test_survival_curve(plugin_NTR_band_cox.m)
     dataregrep = RegressionSurvivalData(Trep, δ, Z)
     plugin_cox_modelrep = PluginCoxNeutralToTheRightModel([0.5], 5.0, ExponentialBaseline(1.0), dataregrep)
-    test_survival_curve(mean_posterior_survival(t, [0.2], plugin_cox_modelrep))
-    plugin_NTR_band_cox_rep = posterior_credible_band(0.05,100,t,[0.2],plugin_cox_modelrep) # posterior band computation
+    test_survival_curve(mean_posterior_survival(t,[0.2], plugin_cox_modelrep))
+    plugin_NTR_band_cox_rep = posterior_credible_band(t,[0.2],plugin_cox_modelrep;ndraws=100) # posterior band computation
     test_band_bounds(plugin_NTR_band_cox_rep.d, plugin_NTR_band_cox_rep.u)
     test_survival_curve(plugin_NTR_band_cox_rep.m)
     cox_model = CoxNeutralToTheRightModel( [[0.5 + v] for v in rand(Normal(0.0,0.25),100)], 5.0, ExponentialBaseline(1.0), datareg)
     test_survival_curve(mean_posterior_survival(t, [0.2], cox_model))
     test_survival_curve(sample_posterior_survival(t, [0.2], cox_model)[50,:])
-    NTR_band_cox = posterior_credible_band( 0.05, t,[0.2],cox_model) # posterior band computation
+    NTR_band_cox = posterior_credible_band(t,[0.2],cox_model) # posterior band computation
     test_band_bounds(NTR_band_cox.d, NTR_band_cox.u)
     test_survival_curve(NTR_band_cox.m)
     cox_modelrep = CoxNeutralToTheRightModel( [[0.5 + v] for v in rand(Normal(0.0,0.25),100)], 5.0, ExponentialBaseline(1.0), dataregrep)
     test_survival_curve(mean_posterior_survival(t, [0.2], cox_modelrep))
     test_survival_curve(sample_posterior_survival(t, [0.2], cox_modelrep)[50,:])
-    NTR_band_cox_rep = posterior_credible_band( 0.05, t,[0.2],cox_modelrep) # posterior band computation
+    NTR_band_cox_rep = posterior_credible_band(t,[0.2],cox_modelrep) # posterior band computation
     test_band_bounds(NTR_band_cox_rep.d, NTR_band_cox_rep.u)
     test_survival_curve(NTR_band_cox_rep.m)
 end
@@ -87,7 +87,7 @@ end
     b = Baseline(κ)
     t =  collect(LinRange(0.0,10.0,300))
     St = exp.(-κ.(t))
-    prior_band = prior_credible_band(0.05,3000,t,10.0,b)
+    prior_band = prior_credible_band(t,10.0,b)
     @test maximum( abs.( St .- prior_band.m ) ) < 0.01
 end
 
@@ -114,16 +114,16 @@ end
     t =  collect(LinRange(0.0,maximum(T)+1,300)) # evaluation grid
     test_survival_curve(mean_posterior_survival(t,model))
     test_survival_curve(sample_posterior_survival(t, model))    
-    NTR_band = posterior_credible_band(0.05,3000,t,model) # posterior band computation
+    NTR_band = posterior_credible_band(t,model;ndraws=100) # posterior band computation
     test_band_bounds(NTR_band.d, NTR_band.u)
     test_survival_curve(NTR_band.m)
     datareg = RegressionSurvivalData(T, δ, Z)
     plugin_cox_model = PluginCoxNeutralToTheRightModel([0.5], 5.0, ExponentialBaseline(1.0), datareg)
     test_survival_curve(mean_posterior_survival(t, [0.2], plugin_cox_model))
     test_survival_curve(sample_posterior_survival(t, [0.2], plugin_cox_model))
-    NTR_band_cox_0 = posterior_credible_band(0.05,100,t,[0.0],plugin_cox_model)
-    NTR_band_cox_1 = posterior_credible_band(0.05,100,t,[1.0],plugin_cox_model)
-    NTR_band_cox_2 = posterior_credible_band(0.05,100,t,[-1.0],plugin_cox_model)
+    NTR_band_cox_0 = posterior_credible_band(t,[0.0],plugin_cox_model;ndraws=100)
+    NTR_band_cox_1 = posterior_credible_band(t,[1.0],plugin_cox_model;ndraws=100)
+    NTR_band_cox_2 = posterior_credible_band(t,[-1.0],plugin_cox_model;ndraws=100)
     test_band_bounds(NTR_band_cox_0.d, NTR_band_cox_0.u)
     test_band_bounds(NTR_band_cox_1.d, NTR_band_cox_1.u)
     test_band_bounds(NTR_band_cox_2.d, NTR_band_cox_2.u)
@@ -161,16 +161,16 @@ end
     t =  collect(LinRange(0.0,maximum(T)+1,300)) # evaluation grid
     test_survival_curve(mean_posterior_survival(t,model))
     test_survival_curve(sample_posterior_survival(t, model))    
-    NTR_band = posterior_credible_band(0.05,3000,t,model) # posterior band computation
+    NTR_band = posterior_credible_band(t,model;ndraws=100) # posterior band computation
     test_band_bounds(NTR_band.d, NTR_band.u)
     test_survival_curve(NTR_band.m)
     datareg = RegressionSurvivalData(T, δ, Z)
     plugin_cox_model = PluginCoxNeutralToTheRightModel([0.5], 5.0, ExponentialBaseline(1.0), datareg)
     test_survival_curve(mean_posterior_survival(t, [0.2], plugin_cox_model))
     test_survival_curve(sample_posterior_survival(t, [0.2], plugin_cox_model))
-    NTR_band_cox_0 = posterior_credible_band(0.05,100,t,[0.0],plugin_cox_model)
-    NTR_band_cox_1 = posterior_credible_band(0.05,100,t,[1.0],plugin_cox_model)
-    NTR_band_cox_2 = posterior_credible_band(0.05,100,t,[-1.0],plugin_cox_model)
+    NTR_band_cox_0 = posterior_credible_band(t,[0.0],plugin_cox_model;ndraws=100)
+    NTR_band_cox_1 = posterior_credible_band(t,[1.0],plugin_cox_model;ndraws=100)
+    NTR_band_cox_2 = posterior_credible_band(t,[-1.0],plugin_cox_model;ndraws=100)
     test_band_bounds(NTR_band_cox_0.d, NTR_band_cox_0.u)
     test_band_bounds(NTR_band_cox_1.d, NTR_band_cox_1.u)
     test_band_bounds(NTR_band_cox_2.d, NTR_band_cox_2.u)
@@ -197,12 +197,12 @@ end
     Sm = mean_posterior_survival(t,model) # NTR posterior mean computation
     test_survival_curve(Sm) # Test survival curve
     @test maximum( abs.(S0.-Sm) ) < 0.01 # consistency test with threshold
-    SmMC_band = posterior_credible_band(0.05,3000,t,model) # NTR posterior mean with Monte-Carlo computation
+    SmMC_band = posterior_credible_band(t,model) # NTR posterior mean with Monte-Carlo computation
     SmMC = SmMC_band.m
     test_survival_curve(SmMC) # Test survival curve
     @test maximum( abs.(S0.-SmMC) ) < 0.01 # consistency test with threshold
     @test maximum(abs.(Sm .- SmMC)) < 0.001 # Monte-Carlo and analytic implementations test
-    Smed_band = posterior_credible_band(0.05,3000,t,model;μ=false) # NTR posterior median with Monte-Carlo computation
+    Smed_band = posterior_credible_band(t,model;mean_center=true) # NTR posterior median with Monte-Carlo computation
     Smed = Smed_band.m
     test_survival_curve(Smed) # Test survival curve
     @test maximum( abs.(S0.-Smed) ) < 0.01 # consistency test with threshold
@@ -258,11 +258,11 @@ end
     @test maximum( abs.(S0_regre_0.-Sm_regre_0) ) < 0.05 # consistency test with threshold
     @test maximum( abs.(S0_regre_1.-Sm_regre_1) ) < 0.05 # consistency test with threshold
     @test maximum( abs.(S0_regre_2.-Sm_regre_2) ) < 0.05 # consistency test with threshold
-    Sm_regre_MC_0_band = posterior_credible_band(0.05,3000,t,z_0,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
+    Sm_regre_MC_0_band = posterior_credible_band(t,z_0,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
     Sm_regre_MC_0 = Sm_regre_MC_0_band.m
-    Sm_regre_MC_1_band = posterior_credible_band(0.05,3000,t,z_1,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
+    Sm_regre_MC_1_band = posterior_credible_band(t,z_1,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
     Sm_regre_MC_1 = Sm_regre_MC_1_band.m
-    Sm_regre_MC_2_band = posterior_credible_band(0.05,3000,t,z_2,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
+    Sm_regre_MC_2_band = posterior_credible_band(t,z_2,pluginmodelregre) # Cox NTR posterior mean with Monte-Carlo computation
     Sm_regre_MC_2 = Sm_regre_MC_2_band.m
     test_survival_curve(Sm_regre_MC_0) # Test survival curve
     test_survival_curve(Sm_regre_MC_1) # Test survival curve
@@ -273,11 +273,11 @@ end
     @test maximum( abs.(S0_regre_0.-Sm_regre_MC_0) ) < 0.055 # consistency test with threshold
     @test maximum( abs.(S0_regre_1.-Sm_regre_MC_1) ) < 0.055 # consistency test with threshold
     @test maximum( abs.(S0_regre_2.-Sm_regre_MC_2) ) < 0.055 # consistency test with threshold
-    Smed_regre_0_band = posterior_credible_band(0.05,3000,t,z_0,pluginmodelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
+    Smed_regre_0_band = posterior_credible_band(t,z_0,pluginmodelregre;mean_center=true) # Cox NTR posterior median with Monte-Carlo computation
     Smed_regre_0 = Smed_regre_0_band.m
-    Smed_regre_1_band = posterior_credible_band(0.05,3000,t,z_1,pluginmodelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
+    Smed_regre_1_band = posterior_credible_band(t,z_1,pluginmodelregre;mean_center=true) # Cox NTR posterior median with Monte-Carlo computation
     Smed_regre_1 = Smed_regre_1_band.m
-    Smed_regre_2_band = posterior_credible_band(0.05,3000,t,z_2,pluginmodelregre;μ=false) # Cox NTR posterior median with Monte-Carlo computation
+    Smed_regre_2_band = posterior_credible_band(t,z_2,pluginmodelregre;mean_center=true) # Cox NTR posterior median with Monte-Carlo computation
     Smed_regre_2 = Smed_regre_2_band.m
     test_survival_curve(Smed_regre_0) # Test survival curve
     test_survival_curve(Smed_regre_1) # Test survival curve

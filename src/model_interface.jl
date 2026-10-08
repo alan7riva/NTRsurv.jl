@@ -1,5 +1,5 @@
-function _show_field( io::IO, label::AbstractString, value; width::Int = 20)
-    print( io, "\n  ", rpad(label * ":", width), value)
+function _show_field( io::IO, label::AbstractString, value; width::Int = 24, gap::Int = 3,)
+    print(io, "\n  ", rpad(label * ":", width), " "^gap, value)
 end
 
 _nobs(data::Union{SurvivalDataNoRep,RegressionSurvivalDataNoRep}) = data.n
@@ -167,13 +167,14 @@ function StatsAPI.coefnames(model::CoxNeutralToTheRightModel)
     return _default_coefnames( length(first(model.c_vec)) )
 end
 
-function StatsAPI.coeftable(model::CoxNeutralToTheRightModel;names::AbstractVector{<:AbstractString}=StatsAPI.coefnames(model), level = 0.05)
+function StatsAPI.coeftable(model::CoxNeutralToTheRightModel;names::AbstractVector{<:AbstractString}=StatsAPI.coefnames(model), level = 0.95)
+    α = 1 - level
     post_coeff_mean = only(mean(model.c_vec,dims=1))
     post_coeff_sd = std(model.c_vec)
-    post_coeff_intervs =  [ [quantile( [s[j] for s in chain_s], 0.5*level ), quantile( [s[j] for s in chain_s], 1 - 0.5*level )] for j in 1:model.data.p ]
+    post_coeff_intervs =  [ [quantile( [s[j] for s in model.c_vec ], 0.5*α ), quantile( [s[j] for s in model.c_vec ], 1 - 0.5*α) ] for j in 1:model.data.p ]
     column_names = [  "Posterior mean",
         "Posterior standard deviation",
-        "$Interval(100*(1-p))% Credible"]
+        "Credible interval $(100*level)%"]
     StatsBase.CoefTable( hcat( post_coeff_mean, post_coeff_sd, post_coeff_intervs),
         column_names,
         names,
@@ -270,67 +271,73 @@ struct RestrictedMeanSurvivalTime
     cr_I::Vector{Float64}
 end
 
-function RestrictedMeanSurvivalTime( l::Int64, t::Vector{Float64}, model::NeutralToTheRightModel,p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Vector{Float64}, model::NeutralToTheRightModel; level::Float64=0.95, ndraws=3000)
     s = "Neutral-to-the-right-model"
+    p = 1-level
     τ = t[end]
     l_t = length(t)
-    S = sample_posterior_survival( l, t,  model)
+    S = sample_posterior_survival( ndraws, t,  model)
     v =  rmst_comp(t,S)
     μ = mean(v)
     cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
     return RestrictedMeanSurvivalTime(s,τ,Float64[],t,l_t,v,μ,p,cr_I)
 end
 
-function RestrictedMeanSurvivalTime( l::Int64, t::Float64, model::NeutralToTheRightModel, m::Int64=500, p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Float64, model::NeutralToTheRightModel; level::Float64=0.95, ndraws::Int64=3000, ngrid::Int64=500)
     s = "Neutral-to-the-right-model"
-    grid =  collect(LinRange(0.0,t,m))
-    S = sample_posterior_survival( l, grid,  model)
+    α = 1 - level
+    grid =  collect(LinRange(0.0,t,ngrid))
+    S = sample_posterior_survival( ndraws, grid,  model)
     v = rmst_comp(grid,S)
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTime(s,t,Float64[],grid,m,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTime(s,t,Float64[],grid,ngrid,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTime( l::Int64, t::Vector{Float64}, z::Vector{Float64}, model::PluginCoxNeutralToTheRightModel,p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Vector{Float64}, z::Vector{Float64}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws=3000)
     s = "Plugin Cox Neutral-to-the-right-model"
+    α = 1 - level
     τ = t[end]
     l_t = length(t) 
-    S = sample_posterior_survival( l, t, z, model)
+    S = sample_posterior_survival( ndraws, t, z, model)
     v =  rmst_comp(t,S)
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTime(s,τ,z,t,l_t,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTime(s,τ,z,t,l_t,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTime( l::Int64, t::Float64, z::Vector{Float64}, model::PluginCoxNeutralToTheRightModel, m::Int64=500,p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Float64, z::Vector{Float64}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws::Int64=3000, ngrid::Int64=500)
     s = "Plugin Cox Neutral-to-the-right-model"
-    grid =  collect(LinRange(0.0,t,m))
-    S = sample_posterior_survival( l, grid, z, model)
+    α = 1 - level
+    grid =  collect(LinRange(0.0,t,ngrid))
+    S = sample_posterior_survival( ndraws, grid, z, model)
     v = rmst_comp(grid,S)
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTime(s,t,z,grid,m,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTime(s,t,z,grid,m,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTime( t::Vector{Float64}, z::Vector{Float64}, model::CoxNeutralToTheRightModel,p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Vector{Float64}, z::Vector{Float64}, model::CoxNeutralToTheRightModel; level::Float64=0.95)
     s = "Cox Neutral-to-the-right-model"
+    α = 1 - level
     τ = t[end]
     l_t = length(t) 
     S = sample_posterior_survival(  t, z, model)
     v =  rmst_comp(t,S)
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTime(s,τ,z,t,l_t,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTime(s,τ,z,t,l_t,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTime( t::Float64, z::Vector{Float64}, model::CoxNeutralToTheRightModel, m::Int64=500,p::Float64=0.05)
+function RestrictedMeanSurvivalTime( t::Float64, z::Vector{Float64}, model::CoxNeutralToTheRightModel; level::Float64=0.95, ngrid::Int64=500)
     s = "Cox Neutral-to-the-right-model"
-    grid =  collect(LinRange(0.0,t,m))
+    α = 1 - level
+    grid =  collect(LinRange(0.0,t,ngrid))
     S = sample_posterior_survival(  grid, z, model)
     v = rmst_comp(grid,S)
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTime(s,t,z,grid,m,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTime(s,t,z,grid,m,v,μ,α,cr_I)
 end
 
 # CredibleBand compact 2-argument show, used by Array show, print(obj) and repr(obj)
@@ -342,14 +349,15 @@ end
 function Base.show( io::IO, ::MIME"text/plain", rmst::RestrictedMeanSurvivalTime)
     print( io, "Restricted mean survival time")
     _show_field( io, "Restriction time", "$(rmst.τ)")
+    _show_field( io, "Grid length", "$(rmst.l_grid)")
     if  !isnothing(rmst.z)
         _show_field( io, "Covariate", "$( parse.( Float64, _format_number.(rmst.z)) )")
     end
     _show_field( io, "Model", rmst.s)
-    _show_field( io, "Draws", "$(rmst.l_grid)")
-    _show_field( io, "Mean", _format_number(rmst.μ))
+    _show_field( io, "Posterior draws", "$( length( rmst.v ) )")
+    _show_field( io, "Posterior mean", _format_number(rmst.μ))
     _show_field( io, "Credible interval", parse.( Float64, _format_number.(rmst.cr_I)) )
-    _show_field( io, "Level", "$( 100*(1-rmst.p) )%")
+    _show_field( io, "Credible level", "$( 100*(1-rmst.p) )%")
 end
 
 """
@@ -372,46 +380,50 @@ struct RestrictedMeanSurvivalTimeContrast
     cr_I::Vector{Float64}
 end
 
-function RestrictedMeanSurvivalTimeContrast( l::Int64, t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, model::PluginCoxNeutralToTheRightModel, p::Float64=0.05)
+function RestrictedMeanSurvivalTimeContrast( t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws=3000)
     s = "Plugin Cox Neutral-to-the-right-model"
+    α = 1 - level
     τ = t[end]
     l_t = length(t) 
-    Sv = sample_posterior_survival( l, t, [z₁,z₂], model)
+    Sv = sample_posterior_survival( ndraws, t, [z₁,z₂], model)
     v = rmst_comp(t, Sv[2] .- Sv[1])
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTimeContrast(l::Int64, t::Float64, z₁::Vector{Float64}, z₂::Vector{Float64}, model::PluginCoxNeutralToTheRightModel, m::Int64=500,p::Float64=0.05)
+function RestrictedMeanSurvivalTimeContrast( t::Float64, z₁::Vector{Float64}, z₂::Vector{Float64}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws=3000,  ngrid::Int64=500)
     s = "Plugin Cox Neutral-to-the-right-model"
-    grid =  collect(LinRange(0.0,t,m))
-    Sv = sample_posterior_survival( l, grid, [z₁,z₂], model)
+    α = 1 - level
+    grid =  collect(LinRange(0.0,t,ngrid))
+    Sv = sample_posterior_survival( ndraws, grid, [z₁,z₂], model)
     v = rmst_comp(t, Sv[2] .- Sv[1])
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,grid,m,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,grid,m,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTimeContrast( t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, model::CoxNeutralToTheRightModel, p::Float64=0.05)
+function RestrictedMeanSurvivalTimeContrast( t::Vector{Float64}, z₁::Vector{Float64}, z₂::Vector{Float64}, model::CoxNeutralToTheRightModel; level::Float64=0.95)
     s = "Cox Neutral-to-the-right-model"
+    α = 1 - level
     τ = t[end]
     l_t = length(t) 
     Sv = sample_posterior_survival( t, [z₁,z₂], model)
     v = rmst_comp(t, Sv[2] .- Sv[1])
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,p,cr_I)
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,t,l_t,v,μ,α,cr_I)
 end
 
-function RestrictedMeanSurvivalTimeContrast( t::Float64, z₁::Vector{Float64}, z₂::Vector{Float64}, model::CoxNeutralToTheRightModel, m::Int64=500,p::Float64=0.05)
+function RestrictedMeanSurvivalTimeContrast( t::Float64, z₁::Vector{Float64}, z₂::Vector{Float64}, model::CoxNeutralToTheRightModel; level::Float64=0.95, ngrid::Int64=500)
     s = "Cox Neutral-to-the-right-model"
+    α = 1 - level
     grid =  collect(LinRange(0.0,t,m))
     Sv = sample_posterior_survival( grid, [z₁,z₂], model)
     v = rmst_comp(t, Sv[2] .- Sv[1])
     μ = mean(v)
-    cr_I = quantile( v, [0.5*p,1.0 - 0.5*p])
-    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,grid,m,v,μ,p,cr_I) 
+    cr_I = quantile( v, [0.5*α,1.0 - 0.5*α])
+    return RestrictedMeanSurvivalTimeContrast(s,τ,z₁,z₂,grid,m,v,μ,α,cr_I) 
 end
 
 # CredibleBand compact 2-argument show, used by Array show, print(obj) and repr(obj)
@@ -421,11 +433,14 @@ end
 
 # CredibleBand detailed 3-argument show used by display(obj), standalone representation on the REPL.
 function Base.show( io::IO, ::MIME"text/plain", rmst::RestrictedMeanSurvivalTimeContrast)
-    print( io, "Restricted mean survival time contrast")
+    print( io, "Restricted mean survival time contrast RMST(z₂) - RMST(z₁)")
     _show_field( io, "Restriction time", "$(rmst.τ)")
+    _show_field( io, "Grid length", "$(rmst.l_grid)")
+    _show_field( io, "Profile z₁", "$( parse.( Float64, _format_number.(rmst.z₁)) )")
+    _show_field( io, "Profile z₂", "$( parse.( Float64, _format_number.(rmst.z₂)) )")
     _show_field( io, "Model", rmst.s)
-    _show_field( io, "Draws", "$(rmst.l_grid)")
-    _show_field( io, "Mean", _format_number(rmst.μ))
+    _show_field( io, "Posterior draws", "$( length( rmst.v ))")
+    _show_field( io, "Posterior mean", _format_number(rmst.μ))
     _show_field( io, "Credible interval", parse.( Float64, _format_number.(rmst.cr_I) ) ) 
-    _show_field( io, "Level", "$(rmst.p)")
+    _show_field( io, "Credible level", "$( 100*(1-rmst.p) )%")
 end
