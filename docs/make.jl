@@ -12,7 +12,10 @@ makedocs(
         edit_link = "main"
     ),
     pages = [
-        "Home" => "index.md",
+    "Home" => "index.md",
+    "Getting started" => "getting_started.md",
+    "Extended tutorials" => "tutorials.md",
+    "API reference" => "api.md",
     ],
 )
 
