@@ -121,7 +121,7 @@ function posterior_credible_band( t::Vector{Float64}, z_new::Vector{Float64}, mo
     return _posterior_credible_band( 1-level, ndraws, t, z_new, model; μ=mean_center)
 end
 
-function posterior_credible_band( t::Vector{Float64}, z_news::Vector{Vector{Float64}}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws::Int64=3000, mean_center::Bool=true, z_ref::Union{Nothing,Vector{Float64}} = nothing)
+function posterior_credible_band( t::Vector{Float64}, z_news::Vector{Vector{Float64}}, model::PluginCoxNeutralToTheRightModel; level::Float64=0.95, ndraws::Int64=3000, mean_center::Bool=false, z_ref::Union{Nothing,Vector{Float64}} = nothing)
     return _posterior_credible_band(1-level, ndraws, t, z_news, model; μ=mean_center,z_ref)
 end
 
