@@ -35,7 +35,7 @@ real-data analyses illustrating:
 - [Small-sample survival analysis](https://alan7riva.github.io/NTRsurv.jl/stable/tutorials/small_sample_analysis.html) ([source notebook](https://github.com/alan7riva/NTRsurv.jl/blob/main/examples/small_sample_analysis.ipynb)) 
     Real data study illustrating informative and weakly informative baseline prior specifications effect on small samples, with an emphasis on tail behavior of the posterior.  
 
-- [Uncertainty quantification for Cox regression models] (https://alan7riva.github.io/NTRsurv.jl/stable/tutorials/Cox_NTR_UQ.html) ([source notebook](https://github.com/alan7riva/NTRsurv.jl/blob/main/examples/Cox_NTR_UQ.ipynb)) 
+- [Uncertainty quantification for Cox regression models](https://alan7riva.github.io/NTRsurv.jl/stable/tutorials/Cox_NTR_UQ.html) ([source notebook](https://github.com/alan7riva/NTRsurv.jl/blob/main/examples/Cox_NTR_UQ.ipynb)) 
     Real data study illustrating NTR-Cox regression modelling, uncertainty quantification with posterior credible bands compared with frequentist confidence bands and posterior restricted survival mean contrasts.  
 
 - [Meta-analysis for cohort data](https://alan7riva.github.io/NTRsurv.jl/stable/tutorials/meta_analysis.html) ([source notebook](https://github.com/alan7riva/NTRsurv.jl/blob/main/examples/meta_analysis.ipynb)) 
